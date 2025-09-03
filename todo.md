@@ -8,9 +8,9 @@ GUI で AWS 上に **Marutabi バックエンド**を構築するための \*\*T
 
 ## 1. 共通準備
 
-* [ ] リージョン選定（Aurora, Bedrock, Location が使える所を確認 → 例: 東京 / バージニア）
-* [ ] VPC を作成（Private サブネット2つ以上）
-* [ ] セキュリティグループを2つ用意
+* [x] リージョン選定（Aurora, Bedrock, Location が使える所を確認 → 例: 東京 / バージニア）
+* [x] VPC を作成（Private サブネット2つ以上）
+* [x] セキュリティグループを2つ用意
 
   * DB 用（Aurora + Proxy）
   * Lambda 用（アウトバウンド 5432 を DB SG に向けて許可）
