@@ -1,16 +1,10 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getServerSession } from "next-auth";
+import type { Session } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
-export async function getSession() {
-  return await getServerSession(authOptions as any);
+export async function requireUser() {
+  const session = (await getServerSession(authOptions)) as Session | null;
+  if (!session?.user) throw new Error("Unauthorized");
+  return { userId: (session.user as any).sub as string };
 }
 
-export async function withUser(handler: any) {
-  return async (req: any, res: any) => {
-    const session = await getSession();
-    if (!session?.user?.sub) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    return handler(req, res, session);
-  };
-}

@@ -1,30 +1,36 @@
-import NextAuth from 'next-auth'
-import CognitoProvider from 'next-auth/providers/cognito'
-import type { NextAuthOptions } from 'next-auth'
+import NextAuth from "next-auth";
+import Github from "next-auth/providers/github";
+import Google from "next-auth/providers/google";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import { prisma } from "@/lib/prisma";
+import type { NextAuthConfig } from "next-auth";
+import { adapter } from "next/dist/server/web/adapter";
 
-export const authOptions: NextAuthOptions = {
+export const authOptions: NextAuthConfig = {
+  adapter: PrismaAdapter(prisma),
+  session: {
+    strategy: "database",
+  },
   providers: [
-    CognitoProvider({
-      clientId: process.env.COGNITO_CLIENT_ID!,
-      clientSecret: process.env.COGNITO_CLIENT_SECRET!,
-      issuer: process.env.COGNITO_ISSUER,
+    Github({
+      clientId: process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    }),
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-  session: { strategy: 'jwt' },
   callbacks: {
-    async jwt({ token, account, profile }) {
-      return token;
-    },
-    async session({ session, token }) {
-      (session.user as any).sub = token.sub;
-      return session;
-    },
+    async session({ session, user }: { session: Session, user: User }) {
+      if (session.user) (session.user as any).id = user.id;
+    }
   },
-
   pages: {
-    signIn: '/login',
+    signIn: "/auth/signin",
   },
 };
 
+
 const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST };
+export { handler as GET, handler as POST }; 
