@@ -3,10 +3,9 @@ import Github from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
-import type { NextAuthConfig } from "next-auth";
-import { adapter } from "next/dist/server/web/adapter";
+import type { NextAuthOptions } from "next-auth";
 
-export const authOptions: NextAuthConfig = {
+export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: "database",
@@ -22,9 +21,10 @@ export const authOptions: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    async session({ session, user }: { session: Session, user: User }) {
-      if (session.user) (session.user as any).id = user.id;
-    }
+    async session({ session, user }) {
+      if (session.user) (session.user as any).id = (user as any).id;
+      return session;
+    },
   },
   pages: {
     signIn: "/auth/signin",
