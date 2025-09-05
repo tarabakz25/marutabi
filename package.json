@@ -16,6 +16,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "deck.gl": "^9.1.14",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.542.0",
     "maplibre-gl": "^5.7.1",
     "next": "15.5.2",
@@ -23,6 +24,7 @@
     "pg": "^8.16.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-leaflet": "^5.0.0",
     "react-map-gl": "^8.0.4",
     "supabase": "^2.39.2",
     "tailwind-merge": "^3.3.1"
@@ -30,6 +32,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.20",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

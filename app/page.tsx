@@ -1,10 +1,12 @@
-import { MapContent } from '@/components/Map';
+import { Map } from '@/components/Map';
+import { Header } from '@/components/Header';
 
 export default function Home() {
   return (
     <main className="min-h-screen">
       <div className="h-screen">
-        <MapContent />
+        <Header />
+        <Map />
       </div>
     </main>
   );
