@@ -1,14 +1,12 @@
 import NextAuth from "next-auth";
 import Github from "next-auth/providers/github";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "@/lib/prisma";
 import type { NextAuthOptions } from "next-auth";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
   session: {
-    strategy: "database",
+    strategy: "jwt",
   },
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     Github({
       clientId: process.env.GITHUB_CLIENT_ID!,
@@ -22,7 +20,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: "/auth/signin",
+    signIn: "/login",
   },
 };
 

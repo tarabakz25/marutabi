@@ -31,7 +31,7 @@ model Session {
   id String @id @default(cuid())
   sessionToken String @unique
   userId String
-  expiresAt Int
+  expires DateTime
   user User @relation(fields: [userId], references: [id])
   @@index([sessionToken])
   @@index([userId])
