@@ -9,7 +9,7 @@ generator client {
 }
 
 model Account {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
   userId String @unique
   type String
   provider String
