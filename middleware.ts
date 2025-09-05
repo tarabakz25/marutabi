@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export function middleware(request: NextRequest) {
-  return NextResponse.redirect(new URL('/home', request.url));
+  return NextResponse.redirect(new URL('/login', request.url));
 }
 
 export const config = {
-  matcher: '/login/:path*',
+  matcher: '/home/:path*',
 }
