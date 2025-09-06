@@ -25,6 +25,46 @@ export interface RailwayLOD {
   stations?: string[];
 }
 
+export interface RailwayGeometryLOD {
+  uri: string;
+  name: string;
+  color?: string;
+  wkt?: string;
+}
+
+/**
+ * WKT (LINESTRING / MULTILINESTRING) を deck.gl PathLayer で使える座標列に変換
+ * 返り値: パスの配列（MULTIの場合は複数）。各パスは [lng, lat][] の配列
+ */
+export function parseWktToPaths(wkt?: string): [number, number][][] {
+  if (!wkt) return [];
+  const text = wkt.trim();
+  if (text.toUpperCase().startsWith('LINESTRING')) {
+    const coords = text
+      .replace(/^LINESTRING\s*\(/i, '')
+      .replace(/\)$/, '')
+      .split(',')
+      .map((pair) => pair.trim().split(/[\s]+/).map((v) => parseFloat(v)) as [number, number])
+      .filter((pt) => !pt.some((v) => Number.isNaN(v)));
+    return [coords];
+  }
+
+  if (text.toUpperCase().startsWith('MULTILINESTRING')) {
+    const inner = text.replace(/^MULTILINESTRING\s*\(\(/i, '').replace(/\)\)$/, '');
+    const parts = inner.split('),(');
+    const paths: [number, number][][] = parts.map((part) => {
+      const coords = part
+        .split(',')
+        .map((pair) => pair.trim().split(/[\s]+/).map((v) => parseFloat(v)) as [number, number])
+        .filter((pt) => !pt.some((v) => Number.isNaN(v)));
+      return coords;
+    });
+    return paths;
+  }
+
+  return [];
+}
+
 export interface CompanyLOD {
   uri: string;
   name: string;
@@ -177,6 +217,45 @@ export async function getRailways(companyName?: string): Promise<RailwayLOD[]> {
     return parseRailwayResults(data);
   } catch (error) {
     console.error('Failed to get railways:', error);
+    return [];
+  }
+}
+
+/**
+ * 路線のWKTジオメトリを取得する
+ */
+export async function getRailwayGeometries(companyName?: string): Promise<RailwayGeometryLOD[]> {
+  const companyFilter = companyName ? `filter( regex( ?company, '${companyName}', 'i' ) )` : '';
+
+  const query = `
+    prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    prefix wdt: <http://www.wikidata.org/prop/direct/>
+    prefix dbpediaowl: <http://dbpedia.org/ontology/>
+    prefix geo: <http://www.opengis.net/ont/geosparql#>
+
+    select distinct ?uri ?label ?color ?company ?wkt where {
+      ?uri a <https://uedayou.net/jrslod/Class/路線> ;
+           rdfs:label ?label .
+
+      optional { ?uri wdt:P465 ?color }
+      optional { ?uri dbpediaowl:operatedBy ?company }
+
+      # ジオメトリは hasGeometry/asWKT の連鎖、および直接 asWKT が付く場合の両方を網羅
+      optional {
+        { ?uri geo:hasGeometry/geo:asWKT ?wkt }
+        union { ?uri geo:asWKT ?wkt }
+      }
+
+      ${companyFilter}
+    }
+    limit 2000
+  `;
+
+  try {
+    const data = await executeSPARQLQuery(query);
+    return parseRailwayGeometryResults(data);
+  } catch (error) {
+    console.error('Failed to get railway geometries:', error);
     return [];
   }
 }
@@ -343,6 +422,17 @@ function parseRailwayResults(data: any): RailwayLOD[] {
     distance: binding.distance?.value ? parseFloat(binding.distance.value) : undefined,
     company: binding.company?.value,
     description: binding.description?.value
+  }));
+}
+
+function parseRailwayGeometryResults(data: any): RailwayGeometryLOD[] {
+  if (!data?.results?.bindings) return [];
+
+  return data.results.bindings.map((binding: any) => ({
+    uri: binding.uri?.value || '',
+    name: binding.label?.value || '',
+    color: binding.color?.value,
+    wkt: binding.wkt?.value
   }));
 }
 

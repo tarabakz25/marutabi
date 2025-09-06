@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import type { Session } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions";
 
 export async function requireUser() {
   const session = (await getServerSession(authOptions)) as Session | null;
