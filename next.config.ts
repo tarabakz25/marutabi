@@ -10,6 +10,20 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Turbopackの設定（無効な設定を削除）
+  turbopack: {
+    // ネットワーク関連の設定
+    resolveAlias: {},
+  },
+  experimental: {
+    // 大きなファイルのハンドリングを改善
+    largePageDataBytes: 128 * 1024, // 128KB
+  },
+  // HTTPタイムアウトの設定
+  onDemandEntries: {
+    maxInactiveAge: 25 * 1000,
+    pagesBufferLength: 2,
+  },
 };
 
 export default nextConfig;

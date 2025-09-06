@@ -43,124 +43,70 @@ function colorForRouteName(name?: string): [number, number, number, number] {
   return [r, g, b, 220];
 }
 
-export default function DeckMap() {
+export default function DeckMapSystemFont() {
   const [railGeojson, setRailGeojson] = useState<any | null>(null);
   const [stationGeojson, setStationGeojson] = useState<any | null>(null);
   const [viewState, setViewState] = useState<typeof INITIAL_VIEW_STATE>(INITIAL_VIEW_STATE);
-  const [fontReady, setFontReady] = useState(false);
 
-  // フォント読み込み
   useEffect(() => {
-    const checkFontReady = async () => {
+    const fetchData = async () => {
       try {
-        // Google Fontsがglobals.cssで既に読み込まれているかチェック
-        if (document.fonts && document.fonts.check) {
-          // Noto Sans JPが利用可能かチェック
-          const notoSansReady = document.fonts.check('16px "Noto Sans JP"');
-          
-          if (notoSansReady) {
-            // eslint-disable-next-line no-console
-            console.log('Noto Sans JP font is ready');
-            setFontReady(true);
-            return;
-          }
+        // eslint-disable-next-line no-console
+        console.log('Starting to fetch GeoJSON data...');
+        
+        const [railRes, stationRes] = await Promise.all([
+          fetch('/api/map/railroads', {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/geo+json,application/json',
+              'Cache-Control': 'no-cache'
+            }
+          }),
+          fetch('/api/map/stations', {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/geo+json,application/json',
+              'Cache-Control': 'no-cache'
+            }
+          })
+        ]);
+
+        // eslint-disable-next-line no-console
+        console.log('Fetch responses received:', { railStatus: railRes.status, stationStatus: stationRes.status });
+
+        if (!railRes.ok) {
+          // eslint-disable-next-line no-console
+          console.error('Railroad fetch failed:', railRes.status, railRes.statusText);
+        }
+        if (!stationRes.ok) {
+          // eslint-disable-next-line no-console
+          console.error('Station fetch failed:', stationRes.status, stationRes.statusText);
         }
 
-        // フォント読み込み完了を待機（最大3秒）
-        let attempts = 0;
-        const maxAttempts = 30; // 100ms × 30 = 3秒
+        const [railData, stationData] = await Promise.all([
+          railRes.ok ? railRes.json() : null,
+          stationRes.ok ? stationRes.json() : null
+        ]);
 
-        const waitForFont = () => {
-          if (attempts >= maxAttempts) {
-            // eslint-disable-next-line no-console
-            console.log('Font loading timeout, using system fonts');
-            setFontReady(true);
-            return;
-          }
+        // eslint-disable-next-line no-console
+        console.log('GeoJSON data parsed:', { 
+          railFeatures: railData?.features?.length || 0, 
+          stationFeatures: stationData?.features?.length || 0 
+        });
 
-          if (document.fonts && document.fonts.check && document.fonts.check('16px "Noto Sans JP"')) {
-            // eslint-disable-next-line no-console
-            console.log('Noto Sans JP font loaded successfully');
-            setFontReady(true);
-            return;
-          }
-
-          attempts++;
-          setTimeout(waitForFont, 100);
-        };
-
-        waitForFont();
+        if (railData) setRailGeojson(railData);
+        if (stationData) setStationGeojson(stationData);
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.error('Font check failed:', e);
+        console.error('Failed to fetch geojson:', e);
         // eslint-disable-next-line no-console
-        console.log('Using system fonts as fallback');
-        setFontReady(true);
+        console.error('Error details:', {
+          name: e instanceof Error ? e.name : 'Unknown',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined
+        });
       }
     };
-
-    checkFontReady();
-  }, []);
-
-  useEffect(() => {
-  const fetchData = async () => {
-    try {
-      // eslint-disable-next-line no-console
-      console.log('Starting to fetch GeoJSON data...');
-      
-      const [railRes, stationRes] = await Promise.all([
-        fetch('/api/map/railroads', {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/geo+json,application/json',
-            'Cache-Control': 'no-cache'
-          }
-        }),
-        fetch('/api/map/stations', {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/geo+json,application/json',
-            'Cache-Control': 'no-cache'
-          }
-        })
-      ]);
-
-      // eslint-disable-next-line no-console
-      console.log('Fetch responses received:', { railStatus: railRes.status, stationStatus: stationRes.status });
-
-      if (!railRes.ok) {
-        // eslint-disable-next-line no-console
-        console.error('Railroad fetch failed:', railRes.status, railRes.statusText);
-      }
-      if (!stationRes.ok) {
-        // eslint-disable-next-line no-console
-        console.error('Station fetch failed:', stationRes.status, stationRes.statusText);
-      }
-
-      const [railData, stationData] = await Promise.all([
-        railRes.ok ? railRes.json() : null,
-        stationRes.ok ? stationRes.json() : null
-      ]);
-
-      // eslint-disable-next-line no-console
-      console.log('GeoJSON data parsed:', { 
-        railFeatures: railData?.features?.length || 0, 
-        stationFeatures: stationData?.features?.length || 0 
-      });
-
-      if (railData) setRailGeojson(railData);
-      if (stationData) setStationGeojson(stationData);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to fetch geojson:', e);
-      // eslint-disable-next-line no-console
-      console.error('Error details:', {
-        name: e instanceof Error ? e.name : 'Unknown',
-        message: e instanceof Error ? e.message : String(e),
-        stack: e instanceof Error ? e.stack : undefined
-      });
-    }
-  };
     fetchData();
   }, []);
 
@@ -219,14 +165,6 @@ export default function DeckMap() {
     return majors;
   }, [stationPointsAll, stationNameFrequency]);
 
-  // TextLayer用の文字セット（無効化）
-  // Missing characterエラー回避のため、characterSetを使用せずシステムフォントに依存
-  const characterSet = useMemo(() => {
-    // eslint-disable-next-line no-console
-    console.log('Using system font, no characterSet required');
-    return [];
-  }, []);
-
   // ズームレベルに応じた駅データのフィルタリング  
   const visibleStations = useMemo(() => {
     if (viewState.zoom >= 13) return stationPointsAll;
@@ -284,24 +222,24 @@ export default function DeckMap() {
       parameters: { depthTest: false },
       visible: visibleStations.length > 0,
     }),
-    // 駅名ラベル
+    // 駅名ラベル（システムフォントのみ使用）
     new TextLayer({
       id: 'station-labels',
       data: visibleStations,
       getPosition: (d: any) => d.position,
       getText: (d: any) => d.name ?? '',
-      // characterSet: characterSet, // Missing characterエラー回避のため無効化
-      fontFamily: '"Noto Sans JP", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "Yu Gothic Medium", "游ゴシック Medium", "Yu Gothic", "游ゴシック", Meiryo, メイリオ, "MS PGothic", "MS Gothic", sans-serif',
+      // システムフォントのみを使用（characterSetを指定しない）
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Yu Gothic UI", "游ゴシック UI", YuGothic, "游ゴシック", "MS PGothic", "MS Gothic", sans-serif',
       fontWeight: 400,
       sizeUnits: 'pixels',
-      getSize: viewState.zoom >= 13 ? 18 : 14,
+      getSize: viewState.zoom >= 13 ? 16 : 12,
       getAngle: 0,
       getTextAnchor: 'start',
       getPixelOffset: [8, 0],
       getAlignmentBaseline: 'center',
       getColor: [40, 40, 40, 255],
       background: true,
-      getBackgroundColor: [255, 255, 255, 220],
+      getBackgroundColor: [255, 255, 255, 200],
       backgroundPadding: [2, 1, 2, 1],
       parameters: { 
         depthTest: false,
@@ -309,12 +247,7 @@ export default function DeckMap() {
         blendFunc: ['SRC_ALPHA', 'ONE_MINUS_SRC_ALPHA'],
       },
       pickable: false,
-      visible: fontReady && visibleStations.length > 0,
-      // フォント読み込みエラーへの対策
-      onError: (error: any) => {
-        // eslint-disable-next-line no-console
-        console.warn('TextLayer error (fallback to system font):', error);
-      },
+      visible: visibleStations.length > 0,
     })
   ];
 
