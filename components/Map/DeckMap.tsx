@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, BitmapLayer, TextLayer, GeoJsonLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
+import type { StationSelection, SelectedStations } from './types';
 
 const INITIAL_VIEW_STATE = {
   longitude: 139.767306,
@@ -43,64 +44,17 @@ function colorForRouteName(name?: string): [number, number, number, number] {
   return [r, g, b, 220];
 }
 
-export default function DeckMap() {
+type Props = {
+  onStationClick?: (station: StationSelection) => void;
+  selected?: SelectedStations;
+  routeGeojson?: any;
+};
+
+export default function DeckMap({ onStationClick, selected, routeGeojson }: Props) {
   const [railGeojson, setRailGeojson] = useState<any | null>(null);
   const [stationGeojson, setStationGeojson] = useState<any | null>(null);
   const [viewState, setViewState] = useState<typeof INITIAL_VIEW_STATE>(INITIAL_VIEW_STATE);
-  const [fontReady, setFontReady] = useState(false);
-
-  // フォント読み込み
-  useEffect(() => {
-    const checkFontReady = async () => {
-      try {
-        // Google Fontsがglobals.cssで既に読み込まれているかチェック
-        if (document.fonts && document.fonts.check) {
-          // Noto Sans JPが利用可能かチェック
-          const notoSansReady = document.fonts.check('16px "Noto Sans JP"');
-          
-          if (notoSansReady) {
-            // eslint-disable-next-line no-console
-            console.log('Noto Sans JP font is ready');
-            setFontReady(true);
-            return;
-          }
-        }
-
-        // フォント読み込み完了を待機（最大3秒）
-        let attempts = 0;
-        const maxAttempts = 30; // 100ms × 30 = 3秒
-
-        const waitForFont = () => {
-          if (attempts >= maxAttempts) {
-            // eslint-disable-next-line no-console
-            console.log('Font loading timeout, using system fonts');
-            setFontReady(true);
-            return;
-          }
-
-          if (document.fonts && document.fonts.check && document.fonts.check('16px "Noto Sans JP"')) {
-            // eslint-disable-next-line no-console
-            console.log('Noto Sans JP font loaded successfully');
-            setFontReady(true);
-            return;
-          }
-
-          attempts++;
-          setTimeout(waitForFont, 100);
-        };
-
-        waitForFont();
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('Font check failed:', e);
-        // eslint-disable-next-line no-console
-        console.log('Using system fonts as fallback');
-        setFontReady(true);
-      }
-    };
-
-    checkFontReady();
-  }, []);
+  const [/* deprecated */, /* setDeprecated */] = useState<boolean>(false);
 
   useEffect(() => {
   const fetchData = async () => {
@@ -219,13 +173,25 @@ export default function DeckMap() {
     return majors;
   }, [stationPointsAll, stationNameFrequency]);
 
-  // TextLayer用の文字セット（無効化）
-  // Missing characterエラー回避のため、characterSetを使用せずシステムフォントに依存
+  // TextLayer用の文字セット（日本語対応）
+  // 駅名に含まれる全ての文字からユニークな配列を生成
   const characterSet = useMemo(() => {
+    const names: string[] = stationGeojson?.features
+      ?.map((f: any) => f?.properties?.N02_005 as string | undefined)
+      .filter((v: string | undefined): v is string => Boolean(v)) ?? [];
+    const set = new Set<string>();
+    // 追加でよく使う記号類も含める
+    const common = ' -・()（）[ ]［］/／・,、。.【】『』"' + '\'' +
+      '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    Array.from(common).forEach((c) => set.add(c));
+    for (const name of names) {
+      for (const ch of Array.from(name)) set.add(ch);
+    }
+    const result = Array.from(set);
     // eslint-disable-next-line no-console
-    console.log('Using system font, no characterSet required');
-    return [];
-  }, []);
+    console.log('TextLayer characterSet size:', result.length);
+    return result;
+  }, [stationGeojson]);
 
   // ズームレベルに応じた駅データのフィルタリング  
   const visibleStations = useMemo(() => {
@@ -271,7 +237,20 @@ export default function DeckMap() {
       parameters: { depthTest: false },
       visible: viewState.zoom >= 5,
     }),
-    // 駅の点表示
+    // 選択中のルート線
+    new GeoJsonLayer({
+      id: 'route-lines',
+      data: routeGeojson ?? { type: 'FeatureCollection', features: [] },
+      stroked: true,
+      filled: false,
+      lineWidthUnits: 'pixels',
+      getLineColor: [20, 120, 240, 230],
+      getLineWidth: 4,
+      pickable: false,
+      parameters: { depthTest: false },
+      visible: Boolean(routeGeojson?.features?.length),
+    }),
+    // 駅の点表示（全体）
     new ScatterplotLayer({
       id: 'stations',
       data: visibleStations,
@@ -281,8 +260,54 @@ export default function DeckMap() {
       radiusMinPixels: 3,
       getFillColor: [220, 80, 60, 230],
       pickable: true,
+      onClick: (info: any) => {
+        const obj = info?.object;
+        if (!obj) return;
+        const station: StationSelection = {
+          name: obj.name ?? '',
+          position: obj.position as [number, number],
+        };
+        onStationClick?.(station);
+      },
       parameters: { depthTest: false },
       visible: visibleStations.length > 0,
+    }),
+    // 選択中の駅（出発/到着/経由）を強調
+    new ScatterplotLayer({
+      id: 'selected-origin',
+      data: selected?.origin ? [selected.origin] : [],
+      getPosition: (d: any) => d.position,
+      radiusUnits: 'pixels',
+      getRadius: 9,
+      radiusMinPixels: 6,
+      getFillColor: [40, 170, 80, 240],
+      pickable: false,
+      parameters: { depthTest: false },
+      visible: Boolean(selected?.origin),
+    }),
+    new ScatterplotLayer({
+      id: 'selected-destination',
+      data: selected?.destination ? [selected.destination] : [],
+      getPosition: (d: any) => d.position,
+      radiusUnits: 'pixels',
+      getRadius: 9,
+      radiusMinPixels: 6,
+      getFillColor: [220, 60, 60, 240],
+      pickable: false,
+      parameters: { depthTest: false },
+      visible: Boolean(selected?.destination),
+    }),
+    new ScatterplotLayer({
+      id: 'selected-vias',
+      data: selected?.vias ?? [],
+      getPosition: (d: any) => d.position,
+      radiusUnits: 'pixels',
+      getRadius: 8,
+      radiusMinPixels: 5,
+      getFillColor: [60, 120, 220, 230],
+      pickable: false,
+      parameters: { depthTest: false },
+      visible: Boolean(selected?.vias && selected.vias.length > 0),
     }),
     // 駅名ラベル
     new TextLayer({
@@ -290,8 +315,8 @@ export default function DeckMap() {
       data: visibleStations,
       getPosition: (d: any) => d.position,
       getText: (d: any) => d.name ?? '',
-      // characterSet: characterSet, // Missing characterエラー回避のため無効化
-      fontFamily: '"Noto Sans JP", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "Yu Gothic Medium", "游ゴシック Medium", "Yu Gothic", "游ゴシック", Meiryo, メイリオ, "MS PGothic", "MS Gothic", sans-serif',
+      characterSet: characterSet,
+      fontFamily: 'system-ui, -apple-system, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "Yu Gothic", "游ゴシック", Meiryo, メイリオ, "MS PGothic", "MS Gothic", sans-serif',
       fontWeight: 400,
       sizeUnits: 'pixels',
       getSize: viewState.zoom >= 13 ? 18 : 14,
@@ -305,11 +330,9 @@ export default function DeckMap() {
       backgroundPadding: [2, 1, 2, 1],
       parameters: { 
         depthTest: false,
-        blend: true,
-        blendFunc: ['SRC_ALPHA', 'ONE_MINUS_SRC_ALPHA'],
       },
       pickable: false,
-      visible: fontReady && visibleStations.length > 0,
+      visible: visibleStations.length > 0,
       // フォント読み込みエラーへの対策
       onError: (error: any) => {
         // eslint-disable-next-line no-console

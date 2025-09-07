@@ -1,13 +1,11 @@
-import { Map } from '@/components/Map';
 import Header from '@/components/Header';
+import MapWithSidebar from '@/components/Map/MapWithSidebar';
 
 export default function Home() {
   return (
     <main className="min-h-screen flex flex-col">
       <Header />
-      <div className="flex-1">
-        <Map />
-      </div>
+      <MapWithSidebar />
     </main>
   );
 }
