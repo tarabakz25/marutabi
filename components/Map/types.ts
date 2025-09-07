@@ -3,6 +3,7 @@
 export type LngLat = [number, number];
 
 export type StationSelection = {
+  id: string;
   name: string;
   position: LngLat;
 };

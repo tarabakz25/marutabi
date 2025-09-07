@@ -118,7 +118,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
     fetchData();
   }, []);
 
-  type StationPoint = { position: [number, number]; name?: string };
+  type StationPoint = { position: [number, number]; name?: string; id?: string };
 
   const stationPointsAll = useMemo<StationPoint[]>(() => {
     if (!stationGeojson?.features) return [] as StationPoint[];
@@ -144,7 +144,8 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       }
       if (!position) continue;
       const name = f?.properties?.N02_005 as string | undefined;
-      points.push({ position, name });
+      const id = (f?.properties?.N02_005c || f?.properties?.N02_005g) as string | undefined;
+      points.push({ position, name, id });
     }
     return points;
   }, [stationGeojson]);
@@ -260,10 +261,11 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       radiusMinPixels: 3,
       getFillColor: [220, 80, 60, 230],
       pickable: true,
-      onClick: (info: any) => {
-        const obj = info?.object;
-        if (!obj) return;
-        const station: StationSelection = {
+        onClick: (info: any) => {
+          const obj = info?.object;
+          if (!obj) return;
+          const station: StationSelection = {
+          id: obj.id ?? '',
           name: obj.name ?? '',
           position: obj.position as [number, number],
         };
