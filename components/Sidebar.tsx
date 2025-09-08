@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button";
 import type { SelectionMode, SelectedStations } from "@/components/Map/types";
 import type { RouteResult } from "@/lib/route";
 import { FaCircle } from "react-icons/fa";
+import { useState, useEffect } from 'react';
+
+type StationSearchResult = {
+  id: string;
+  name: string;
+  position: [number, number];
+};
 // Timeline component
 const RouteTimeline = ({ selection, routeResult }: { selection: SelectedStations; routeResult: RouteResult }) => {
   const stations = [
@@ -55,7 +62,27 @@ export default function Sidebar({
   onRemoveVia,
   onSearch,
   routeResult,
-}: Props) {
+  onStationSelected,
+}: Props & { onStationSelected: (s: StationSearchResult) => void; }) {
+
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<StationSearchResult[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchResults = async () => {
+      if (!query) { setResults([]); return; }
+      try {
+        const res = await fetch(`/api/map/stations/search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        if (!res.ok) return;
+        const data: StationSearchResult[] = await res.json();
+        setResults(data);
+      } catch { /* ignore */ }
+    };
+    const t = setTimeout(fetchResults, 300);
+    return () => { clearTimeout(t); controller.abort(); };
+  }, [query]);
+
   const isActive = (m: SelectionMode) =>
     mode === m ? "bg-primary text-primary-foreground" : "bg-accent/40";
 
@@ -73,6 +100,28 @@ export default function Sidebar({
           onClick={() => onChangeMode("destination")}>到着</Button>
         <Button size="sm" variant="outline" className={isActive("via")}
           onClick={() => onChangeMode("via")}>経由</Button>
+      </div>
+
+      <div className="space-y-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="駅名検索"
+          className="w-full px-2 py-1 border rounded text-sm"
+        />
+        {results.length > 0 && (
+          <div className="max-h-40 overflow-y-auto border rounded text-sm bg-white shadow">
+            {results.map((r) => (
+              <div
+                key={r.id}
+                className="px-2 py-1 hover:bg-accent cursor-pointer"
+                onClick={() => { onStationSelected(r); setQuery(''); setResults([]); }}
+              >
+                {r.name}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-3 text-sm">

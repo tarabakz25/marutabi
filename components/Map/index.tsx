@@ -11,6 +11,7 @@ export type DeckMapProps = {
   selected?: SelectedStations;
   routeGeojson?: any;
   routeOperators?: string[];
+  flyTo?: [number, number] | null;
 };
 
 export const Map = (props: DeckMapProps) => {

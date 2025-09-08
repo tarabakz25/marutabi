@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, BitmapLayer, TextLayer, GeoJsonLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
-import type { StationSelection, SelectedStations, FocusPosition } from './types';
+import type { StationSelection, SelectedStations } from './types';
 
 const FIXED_ZOOM = 13.5;
 const INITIAL_VIEW_STATE = {
@@ -64,10 +64,9 @@ type Props = {
   selected?: SelectedStations;
   routeGeojson?: any;
   routeOperators?: string[];
-  focusPosition?: FocusPosition;
 };
 
-export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, focusPosition }: Props) {
+export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators }: Props) {
   const [railGeojson, setRailGeojson] = useState<any | null>(null);
   const [stationGeojson, setStationGeojson] = useState<any | null>(null);
   const [viewState, setViewState] = useState<typeof INITIAL_VIEW_STATE>(INITIAL_VIEW_STATE);
@@ -134,13 +133,6 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
   };
     fetchData();
   }, []);
-
-  // center map when focusPosition changes
-  useEffect(() => {
-    if (focusPosition) {
-      setViewState((prev) => ({ ...prev, longitude: focusPosition[0], latitude: focusPosition[1], zoom: Math.max(prev.zoom, 9) }));
-    }
-  }, [focusPosition]);
 
   const railDataFiltered = useMemo(() => {
     if (!railGeojson) return { type: 'FeatureCollection', features: [] };
@@ -376,7 +368,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
       getLineWidth: 2.5,
       pickable: true,
       parameters: { depthTest: false },
-      visible: (routeOperators && routeOperators.length > 0 ? true : !hasRoute) && viewState.zoom >= 5,
+      visible: viewState.zoom >= 5,
     }),
     // 選択中のルート線
     new GeoJsonLayer({
@@ -385,7 +377,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
       stroked: true,
       filled: false,
       lineWidthUnits: 'pixels',
-      getLineColor: (f: any) => colorForRouteName((f.properties?.operators?.[0] as string) ?? undefined),
+      getLineColor: [20, 120, 240, 230],
       getLineWidth: 4,
       pickable: false,
       parameters: { depthTest: false },

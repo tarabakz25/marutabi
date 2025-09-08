@@ -49,10 +49,11 @@ import type { FeatureCollection, LineString, Position, Feature } from 'geojson';
 export type Priority = 'optimal' | 'cost' | 'time';
 
 // Graph structures
-interface Edge { to: string; dist: number; operator: string; }
+interface Edge { to: string; dist: number; operator: string; line?: string; }
 const adjacency = new Map<string, Edge[]>();
 const nodeCoords = new Map<string, Position>();
 const stationNode = new Map<string, string>();
+const nodeStations = new Map<string, string[]>();
 let initialized = false;
 
 function nodeId(pos: Position): string {
@@ -105,15 +106,17 @@ async function initGraph() {
       nodeCoords.set(aId, a);
       nodeCoords.set(bId, b);
       const dist = haversine(a, b);
-      const operator = (feature.properties as any)?.N02_004 as string | undefined ?? 'Unknown';
+      const props = feature.properties as any;
+      const operator = props?.N02_004 as string | undefined ?? 'Unknown';
+      const lineName = props?.N02_003 as string | undefined ?? 'UnknownLine';
       if (!adjacency.has(aId)) adjacency.set(aId, []);
       if (!adjacency.has(bId)) adjacency.set(bId, []);
-      adjacency.get(aId)!.push({ to: bId, dist, operator });
-      adjacency.get(bId)!.push({ to: aId, dist, operator });
+      adjacency.get(aId)!.push({ to: bId, dist, operator, line: lineName });
+      adjacency.get(bId)!.push({ to: aId, dist, operator, line: lineName });
     }
   }
 
-  const stationData = JSON.parse(await fs.readFile(stationPath, 'utf-8')) as FeatureCollection<LineString>;
+  const stationData = JSON.parse(await fs.readFile(stationPath, 'utf-8')) as any;
   for (const f of stationData.features) {
     const props = (f.properties ?? {}) as Record<string, unknown>;
     const id = (props['N02_005c'] ?? props['N02_005g']) as string | undefined;
@@ -134,6 +137,8 @@ async function initGraph() {
     if (!coord) continue;
     const nearest = findNearestNode(coord);
     stationNode.set(id, nearest);
+    if (!nodeStations.has(nearest)) nodeStations.set(nearest, []);
+    nodeStations.get(nearest)!.push(id);
   }
 
   // save to global cache
@@ -197,6 +202,8 @@ export type FindRouteOptions = {
   priority?: Priority;
 };
 
+export type TransferPoint = { id: string; position: [number, number] };
+
 export type RouteResult = {
   geojson: FeatureCollection<LineString>;
   summary: {
@@ -206,6 +213,7 @@ export type RouteResult = {
     operators: string[];
     passes: string[];
   };
+  transfers: TransferPoint[];
 };
 
 export async function findRoute({
@@ -221,6 +229,8 @@ export async function findRoute({
   let fareTotal = 0;
   let timeTotal = 0;
   let distanceTotal = 0;
+  const transferSet = new Map<string, TransferPoint>();
+
   for (let i = 0; i < points.length - 1; i++) {
     const startNode = stationNode.get(points[i]);
     const endNode = stationNode.get(points[i + 1]);
@@ -246,6 +256,24 @@ export async function findRoute({
       const edges = adjacency.get(path[j]) ?? [];
       const edge = edges.find((e) => e.to === path[j + 1]);
       if (edge) segOperators.add(edge.operator);
+
+      // detect transfer when operator changes between consecutive edges
+      if (j < path.length - 2) {
+        const edgesNext = adjacency.get(path[j + 1]) ?? [];
+        const edgeNext = edgesNext.find((e) => e.to === path[j + 2]);
+        if (edge && edgeNext && edge.operator !== edgeNext.operator) {
+          const nodeIdMid = path[j + 1];
+          const posMid = nodeCoords.get(nodeIdMid);
+          if (posMid) {
+            // pick first station id if exists else use nodeId as id
+            const stationIds = nodeStations.get(nodeIdMid) ?? [];
+            const tid = stationIds[0] ?? nodeIdMid;
+            if (!transferSet.has(tid)) {
+              transferSet.set(tid, { id: tid, position: posMid as [number, number] });
+            }
+          }
+        }
+      }
     }
     const operatorsArr = Array.from(segOperators);
     const segDist = coords.reduce((acc, cur, idx) => {
@@ -286,6 +314,7 @@ export async function findRoute({
   return {
     geojson: { type: 'FeatureCollection', features },
     summary: { fareTotal, timeTotal, distanceTotal, operators: Array.from(overallOperators), passes },
+    transfers: Array.from(transferSet.values()),
   };
 }
 

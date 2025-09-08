@@ -4,55 +4,61 @@ import path from 'node:path';
 
 export const dynamic = 'force-dynamic';
 
-let stationsCache: { id: string; name: string; position: [number, number] }[] | null = null;
+// Cache parsed station data between requests to improve performance
+let cachedStations: { id: string; name: string; position: [number, number] }[] | null = null;
 
 async function loadStations() {
-  if (stationsCache) return stationsCache;
+  if (cachedStations) return cachedStations;
+
   const filePath = path.join(process.cwd(), 'data', 'map', 'N02-24_Station.geojson');
   const content = await fs.readFile(filePath, 'utf-8');
-  const geojson = JSON.parse(content);
+  const geo = JSON.parse(content);
+
   const stations: { id: string; name: string; position: [number, number] }[] = [];
-  for (const f of geojson.features as any[]) {
-    const props = f?.properties ?? {};
-    const name: string | undefined = props.N02_005;
-    const id: string | undefined = props.N02_005c ?? props.N02_005g;
-    if (!name || !id) continue;
-    // geometry is LineString or Point. Pick first coordinate as representative.
-    let lng = 0;
-    let lat = 0;
-    if (f.geometry.type === 'Point') {
-      [lng, lat] = f.geometry.coordinates;
-    } else if (f.geometry.type === 'LineString') {
-      [lng, lat] = f.geometry.coordinates[0];
-    } else if (f.geometry.type === 'MultiLineString') {
-      [lng, lat] = f.geometry.coordinates[0][0];
+  for (const f of geo.features ?? []) {
+    const name = f?.properties?.N02_005 as string | undefined;
+    if (!name) continue;
+    const id = (f?.properties?.N02_005c || f?.properties?.N02_005g) as string | undefined;
+    if (!id) continue;
+
+    // Geometry may vary; find representative coordinate
+    let position: [number, number] | undefined;
+    const g = f.geometry;
+    if (!g) continue;
+    if (g.type === 'Point') {
+      position = g.coordinates as [number, number];
+    } else if (g.type === 'LineString' && Array.isArray(g.coordinates)) {
+      const coords = g.coordinates as [number, number][];
+      position = coords[Math.floor(coords.length / 2)];
+    } else if (g.type === 'MultiLineString' && Array.isArray(g.coordinates)) {
+      let longest: [number, number][] | undefined;
+      for (const part of g.coordinates as [number, number][][]) {
+        if (!longest || part.length > longest.length) longest = part;
+      }
+      if (longest) position = longest[Math.floor(longest.length / 2)];
     }
-    stations.push({ id, name, position: [lng, lat] });
+    if (!position) continue;
+
+    stations.push({ id, name, position });
   }
-  stationsCache = stations;
+  cachedStations = stations;
   return stations;
 }
 
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const q = (searchParams.get('q') ?? '').trim();
-    if (!q) {
-      return NextResponse.json({ results: [] });
-    }
-    const stations = await loadStations();
-    const lower = q.toLowerCase();
-    const filtered = stations.filter((s) => s.name.toLowerCase().includes(lower));
-    // sort by position of match and then by name length
-    filtered.sort((a, b) => {
-      const ia = a.name.toLowerCase().indexOf(lower);
-      const ib = b.name.toLowerCase().indexOf(lower);
-      if (ia !== ib) return ia - ib;
-      return a.name.length - b.name.length;
-    });
-    return NextResponse.json({ results: filtered.slice(0, 20) });
-  } catch (error) {
-    console.error('Station search error', error);
-    return NextResponse.json({ error: 'Failed to search stations' }, { status: 500 });
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const q = searchParams.get('q')?.trim();
+  if (!q) {
+    return NextResponse.json({ error: 'query parameter "q" required' }, { status: 400 });
   }
+
+  const stations = await loadStations();
+  const qLower = q.toLowerCase();
+  const result = stations.filter((s) => s.name.toLowerCase().includes(qLower)).slice(0, 20);
+
+  return NextResponse.json(result, {
+    headers: {
+      'cache-control': 'public, max-age=300'
+    }
+  });
 }
