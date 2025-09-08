@@ -150,6 +150,71 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
     return points;
   }, [stationGeojson]);
 
+  // 同名かつ近接する駅を1つに集約する（半径400m でクラスタリング）
+  const stationPointsAggregatedAll = useMemo<StationPoint[]>(() => {
+    if (stationPointsAll.length === 0) return [] as StationPoint[];
+
+    // 簡易 haversine  (メートル)
+    const R = 6371000;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const haversine = (a: [number, number], b: [number, number]): number => {
+      const dLat = toRad(b[1] - a[1]);
+      const dLon = toRad(b[0] - a[0]);
+      const lat1 = toRad(a[1]);
+      const lat2 = toRad(b[1]);
+      const h =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+
+    const THRESHOLD = 400; // meters
+
+    // グループ化: name → clusters
+    const aggregated: StationPoint[] = [];
+    const byName = new Map<string, StationPoint[]>();
+    for (const p of stationPointsAll) {
+      if (!p.name) continue;
+      const arr = byName.get(p.name) ?? [];
+      arr.push(p);
+      byName.set(p.name, arr);
+    }
+
+    for (const [name, pts] of byName) {
+      const clusters: StationPoint[][] = [];
+      for (const p of pts) {
+        let found = false;
+        for (const cluster of clusters) {
+          // 距離が閾値以内なら同じクラスター
+          if (haversine(p.position, cluster[0].position) < THRESHOLD) {
+            cluster.push(p);
+            found = true;
+            break;
+          }
+        }
+        if (!found) clusters.push([p]);
+      }
+      for (const cluster of clusters) {
+        // 重心計算
+        let lonSum = 0;
+        let latSum = 0;
+        let id: string | undefined = undefined;
+        for (const p of cluster) {
+          lonSum += p.position[0];
+          latSum += p.position[1];
+          if (!id && p.id) id = p.id;
+        }
+        const count = cluster.length;
+        aggregated.push({
+          name,
+          id,
+          position: [lonSum / count, latSum / count] as [number, number],
+        });
+      }
+    }
+    return aggregated;
+  }, [stationPointsAll]);
+
   const stationNameFrequency = useMemo(() => {
     const freq = new Map<string, number>();
     if (!stationGeojson?.features) return freq;
@@ -162,9 +227,9 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
   }, [stationGeojson]);
 
   const stationPointsMajor = useMemo<StationPoint[]>(() => {
-    if (stationPointsAll.length === 0) return [] as StationPoint[];
+    if (stationPointsAggregatedAll.length === 0) return [] as StationPoint[];
     const majors: StationPoint[] = [];
-    for (const p of stationPointsAll) {
+    for (const p of stationPointsAggregatedAll) {
       const name = p.name ?? '';
       const freq = stationNameFrequency.get(name) ?? 0;
       // 重複駅名(乗換可能性高) or サンプリングで主要駅化（常に一定割合が表示されるように）
@@ -172,7 +237,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       if (freq >= 2 || sampled) majors.push(p);
     }
     return majors;
-  }, [stationPointsAll, stationNameFrequency]);
+  }, [stationPointsAggregatedAll, stationNameFrequency]);
 
   // TextLayer用の文字セット（日本語対応）
   // 駅名に含まれる全ての文字からユニークな配列を生成
@@ -196,10 +261,10 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
 
   // ズームレベルに応じた駅データのフィルタリング  
   const visibleStations = useMemo(() => {
-    if (viewState.zoom >= 13) return stationPointsAll;
+    if (viewState.zoom >= 13) return stationPointsAggregatedAll;
     if (viewState.zoom >= 8) return stationPointsMajor;
     return [];
-  }, [stationPointsAll, stationPointsMajor, viewState.zoom]);
+  }, [stationPointsAggregatedAll, stationPointsMajor, viewState.zoom]);
 
   const layers = [
     new TileLayer({
