@@ -12,6 +12,8 @@ export type DeckMapProps = {
   routeGeojson?: any;
   routeOperators?: string[];
   flyTo?: [number, number] | null;
+  /** マップの初期ロード完了時に呼び出される */
+  onLoadComplete?: () => void;
 };
 
 export const Map = (props: DeckMapProps) => {

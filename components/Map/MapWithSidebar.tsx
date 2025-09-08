@@ -48,6 +48,7 @@ export default function MapWithSidebar() {
   const [routeGeojson, setRouteGeojson] = useState<any>({ type: "FeatureCollection", features: [] });
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchToken, setSearchToken] = useState<number>(0);
 
@@ -107,7 +108,7 @@ export default function MapWithSidebar() {
   };
 
   return (
-    <div className="w-full h-[calc(100vh-6rem)] flex">
+    <div className="w-full h-[100dvh] flex">
       <Sidebar
         mode={mode}
         selection={selection}
@@ -119,7 +120,12 @@ export default function MapWithSidebar() {
         onStationSelected={handleStationSelectedFromSearch}
       />
       <div className="flex-1 relative">
-        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} flyTo={flyTo} />
+        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} />
+        {(!mapLoaded) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-20">
+            <div className="animate-pulse text-sm">地図を読み込み中...</div>
+          </div>
+        )}
         {loading && (
           <div className="absolute top-2 right-2 bg-white px-3 py-1 text-xs shadow">計算中...</div>
         )}

@@ -65,11 +65,13 @@ type Props = {
   routeGeojson?: any;
   routeOperators?: string[];
   flyTo?: [number, number] | null;
+  onLoadComplete?: () => void;
 };
 
-export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, flyTo }: Props) {
+export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, flyTo, onLoadComplete }: Props) {
   const [railGeojson, setRailGeojson] = useState<any | null>(null);
   const [stationGeojson, setStationGeojson] = useState<any | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [viewState, setViewState] = useState<typeof INITIAL_VIEW_STATE>(INITIAL_VIEW_STATE);
   const [/* deprecated */, /* setDeprecated */] = useState<boolean>(false);
 
@@ -134,6 +136,14 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
   };
     fetchData();
   }, []);
+
+  // call onLoadComplete when both geojson loaded first time
+  useEffect(() => {
+    if (!dataLoaded && railGeojson && stationGeojson) {
+      setDataLoaded(true);
+      onLoadComplete?.();
+    }
+  }, [railGeojson, stationGeojson, dataLoaded, onLoadComplete]);
 
   useEffect(() => {
     if (flyTo) {

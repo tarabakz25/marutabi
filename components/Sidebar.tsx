@@ -111,9 +111,9 @@ export default function Sidebar({
         />
         {results.length > 0 && (
           <div className="max-h-40 overflow-y-auto border rounded text-sm bg-white shadow">
-            {results.map((r) => (
+            {results.map((r, idx) => (
               <div
-                key={r.id}
+                key={`${r.id}-${idx}`}
                 className="px-2 py-1 hover:bg-accent cursor-pointer"
                 onClick={() => { onStationSelected(r); setQuery(''); setResults([]); }}
               >
