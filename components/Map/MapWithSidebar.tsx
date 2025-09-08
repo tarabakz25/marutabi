@@ -5,6 +5,7 @@ import Sidebar from "@/components/Sidebar";
 import { Map } from "@/components/Map";
 import type { SelectedStations, StationSelection, SelectionMode } from "./types";
 import type { RouteResult } from "@/lib/route";
+type StationSearchResult = { id: string; name: string; position: [number, number] };
 
 export default function MapWithSidebar() {
   const [mode, setMode] = useState<SelectionMode>("origin");
@@ -13,6 +14,7 @@ export default function MapWithSidebar() {
     destination: undefined,
     vias: [],
   });
+  const [flyTo, setFlyTo] = useState<[number, number] | null>(null);
 
   const handleStationClick = (station: StationSelection) => {
     setSelection((prev) => {
@@ -28,6 +30,7 @@ export default function MapWithSidebar() {
     });
     // 出発 → 到着 までは自動でモードを進める
     if (mode === "origin") setMode("destination");
+    setFlyTo(station.position);
   };
 
   const handleClearAll = () => {
@@ -98,6 +101,11 @@ export default function MapWithSidebar() {
     fetchRoute();
   }, [searchToken]);
 
+  const handleStationSelectedFromSearch = (res: StationSearchResult) => {
+    const station: StationSelection = { id: res.id, name: res.name, position: res.position };
+    handleStationClick(station);
+  };
+
   return (
     <div className="w-full h-[calc(100vh-6rem)] flex">
       <Sidebar
@@ -108,9 +116,10 @@ export default function MapWithSidebar() {
         onRemoveVia={handleRemoveVia}
         onSearch={handleSearch}
         routeResult={routeResult}
+        onStationSelected={handleStationSelectedFromSearch}
       />
       <div className="flex-1 relative">
-        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} />
+        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} flyTo={flyTo} />
         {loading && (
           <div className="absolute top-2 right-2 bg-white px-3 py-1 text-xs shadow">計算中...</div>
         )}
