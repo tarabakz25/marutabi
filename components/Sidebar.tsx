@@ -9,6 +9,7 @@ type Props = {
   onChangeMode: (mode: SelectionMode) => void;
   onClearAll: () => void;
   onRemoveVia: (index: number) => void;
+  onSearch: () => void;
 };
 
 export default function Sidebar({
@@ -17,6 +18,7 @@ export default function Sidebar({
   onChangeMode,
   onClearAll,
   onRemoveVia,
+  onSearch,
 }: Props) {
   const isActive = (m: SelectionMode) =>
     mode === m ? "bg-primary text-primary-foreground" : "bg-accent/40";
@@ -67,6 +69,7 @@ export default function Sidebar({
       </div>
 
       <div className="mt-auto flex gap-2">
+        <Button onClick={onSearch} className="w-full">検索する</Button>
         <Button variant="outline" onClick={onClearAll} className="w-full">クリア</Button>
       </div>
     </aside>

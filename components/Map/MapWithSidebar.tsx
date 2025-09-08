@@ -44,6 +44,13 @@ export default function MapWithSidebar() {
   const [routeGeojson, setRouteGeojson] = useState<any>({ type: "FeatureCollection", features: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchToken, setSearchToken] = useState<number>(0);
+
+  const handleSearch = () => {
+    // selection should contain at least origin & destination
+    if (!selection.origin || !selection.destination) return;
+    setSearchToken(Date.now());
+  };
 
   useEffect(() => {
     const points: StationSelection[] = [];
@@ -51,19 +58,20 @@ export default function MapWithSidebar() {
     points.push(...selection.vias);
     if (selection.destination) points.push(selection.destination);
 
+    if (searchToken === 0) return;
+
     if (points.length < 2) {
       setRouteGeojson({ type: "FeatureCollection", features: [] });
       return;
     }
 
     const fetchRoute = async () => {
-      if (!selection.origin || !selection.destination) return;
       setLoading(true);
       setError(null);
       try {
         const params = new URLSearchParams();
-        params.set("origin", selection.origin.id);
-        params.set("destination", selection.destination.id);
+        params.set("origin", selection.origin!.id);
+        params.set("destination", selection.destination!.id);
         for (const v of selection.vias) params.append("via", v.id);
         const res = await fetch(`/api/map/route?${params.toString()}`);
         if (!res.ok) throw new Error(await res.text());
@@ -78,7 +86,7 @@ export default function MapWithSidebar() {
       }
     };
     fetchRoute();
-  }, [selection]);
+  }, [searchToken]);
 
   return (
     <div className="w-full h-[calc(100vh-6rem)] flex">
@@ -88,6 +96,7 @@ export default function MapWithSidebar() {
         onChangeMode={setMode}
         onClearAll={handleClearAll}
         onRemoveVia={handleRemoveVia}
+        onSearch={handleSearch}
       />
       <div className="flex-1 relative">
         <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} />

@@ -150,7 +150,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
     return points;
   }, [stationGeojson]);
 
-  // 同名かつ近接する駅を1つに集約する（半径400m でクラスタリング）
+  // 近接する駅を1つに集約する（半径400m でクラスタリング）
   const stationPointsAggregatedAll = useMemo<StationPoint[]>(() => {
     if (stationPointsAll.length === 0) return [] as StationPoint[];
 
@@ -170,48 +170,40 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
 
     const THRESHOLD = 400; // meters
 
-    // グループ化: name → clusters
-    const aggregated: StationPoint[] = [];
-    const byName = new Map<string, StationPoint[]>();
+    const clusters: StationPoint[][] = [];
     for (const p of stationPointsAll) {
-      if (!p.name) continue;
-      const arr = byName.get(p.name) ?? [];
-      arr.push(p);
-      byName.set(p.name, arr);
+      if (!p.position) continue;
+      let found = false;
+      for (const cluster of clusters) {
+        if (haversine(p.position, cluster[0].position) < THRESHOLD) {
+          cluster.push(p);
+          found = true;
+          break;
+        }
+      }
+      if (!found) clusters.push([p]);
     }
 
-    for (const [name, pts] of byName) {
-      const clusters: StationPoint[][] = [];
-      for (const p of pts) {
-        let found = false;
-        for (const cluster of clusters) {
-          // 距離が閾値以内なら同じクラスター
-          if (haversine(p.position, cluster[0].position) < THRESHOLD) {
-            cluster.push(p);
-            found = true;
-            break;
-          }
-        }
-        if (!found) clusters.push([p]);
+    const aggregated: StationPoint[] = clusters.map((cluster) => {
+      // 重心計算
+      let lonSum = 0;
+      let latSum = 0;
+      let name: string | undefined = undefined;
+      let id: string | undefined = undefined;
+      for (const p of cluster) {
+        lonSum += p.position[0];
+        latSum += p.position[1];
+        // 表示名は最初に現れた名前を採用（同一地点で複数名称がある場合は任意選択）
+        if (!name && p.name) name = p.name;
+        if (!id && p.id) id = p.id;
       }
-      for (const cluster of clusters) {
-        // 重心計算
-        let lonSum = 0;
-        let latSum = 0;
-        let id: string | undefined = undefined;
-        for (const p of cluster) {
-          lonSum += p.position[0];
-          latSum += p.position[1];
-          if (!id && p.id) id = p.id;
-        }
-        const count = cluster.length;
-        aggregated.push({
-          name,
-          id,
-          position: [lonSum / count, latSum / count] as [number, number],
-        });
-      }
-    }
+      const count = cluster.length;
+      return {
+        name,
+        id,
+        position: [lonSum / count, latSum / count] as [number, number],
+      };
+    });
     return aggregated;
   }, [stationPointsAll]);
 
@@ -225,6 +217,24 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
     }
     return freq;
   }, [stationGeojson]);
+
+  // 乗り入れ路線数が多い駅（＝利用者が多い傾向）を抽出
+  const stationPointsFrequent = useMemo<StationPoint[]>(() => {
+    if (stationPointsAggregatedAll.length === 0) return [] as StationPoint[];
+    const frequent: StationPoint[] = [];
+    for (const p of stationPointsAggregatedAll) {
+      const name = p.name ?? '';
+      const freq = stationNameFrequency.get(name) ?? 0;
+      if (freq >= 3) frequent.push(p); // 3路線以上乗り入れ
+    }
+    // 頻度順に並べ、上位 800 件程度に制限してパフォーマンス確保
+    frequent.sort((a, b) => {
+      const fa = stationNameFrequency.get(a.name ?? '') ?? 0;
+      const fb = stationNameFrequency.get(b.name ?? '') ?? 0;
+      return fb - fa;
+    });
+    return frequent.slice(0, 800);
+  }, [stationPointsAggregatedAll, stationNameFrequency]);
 
   const stationPointsMajor = useMemo<StationPoint[]>(() => {
     if (stationPointsAggregatedAll.length === 0) return [] as StationPoint[];
@@ -261,10 +271,11 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
 
   // ズームレベルに応じた駅データのフィルタリング  
   const visibleStations = useMemo(() => {
-    if (viewState.zoom >= 13) return stationPointsAggregatedAll;
-    if (viewState.zoom >= 8) return stationPointsMajor;
+    if (viewState.zoom >= 13) return stationPointsAggregatedAll;       // 詳細表示
+    if (viewState.zoom >= 11) return stationPointsMajor;              // 中間表示
+    if (viewState.zoom >= 8) return stationPointsFrequent;            // 広域表示
     return [];
-  }, [stationPointsAggregatedAll, stationPointsMajor, viewState.zoom]);
+  }, [stationPointsAggregatedAll, stationPointsMajor, stationPointsFrequent, viewState.zoom]);
 
   const layers = [
     new TileLayer({
