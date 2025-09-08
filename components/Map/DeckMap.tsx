@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, BitmapLayer, TextLayer, GeoJsonLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
-import type { StationSelection, SelectedStations } from './types';
+import type { StationSelection, SelectedStations, FocusPosition } from './types';
 
+const FIXED_ZOOM = 13.5;
 const INITIAL_VIEW_STATE = {
   longitude: 139.767306,
   latitude: 35.681236,
-  zoom: 10,
+  zoom: FIXED_ZOOM,
   pitch: 0,
   bearing: 0,
 };
@@ -44,13 +45,29 @@ function colorForRouteName(name?: string): [number, number, number, number] {
   return [r, g, b, 220];
 }
 
+// Grid-based spatial sampling helper (approx cellDeg in degrees)
+const gridSample = (points: { position: [number, number] }[], cellDeg: number) => {
+  const q = (v: number) => Math.round(v / cellDeg);
+  const seen = new Set<string>();
+  const out: typeof points = [];
+  for (const p of points) {
+    const key = `${q(p.position[0])}:${q(p.position[1])}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+};
+
 type Props = {
   onStationClick?: (station: StationSelection) => void;
   selected?: SelectedStations;
   routeGeojson?: any;
+  routeOperators?: string[];
+  focusPosition?: FocusPosition;
 };
 
-export default function DeckMap({ onStationClick, selected, routeGeojson }: Props) {
+export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, focusPosition }: Props) {
   const [railGeojson, setRailGeojson] = useState<any | null>(null);
   const [stationGeojson, setStationGeojson] = useState<any | null>(null);
   const [viewState, setViewState] = useState<typeof INITIAL_VIEW_STATE>(INITIAL_VIEW_STATE);
@@ -117,6 +134,23 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
   };
     fetchData();
   }, []);
+
+  // center map when focusPosition changes
+  useEffect(() => {
+    if (focusPosition) {
+      setViewState((prev) => ({ ...prev, longitude: focusPosition[0], latitude: focusPosition[1], zoom: Math.max(prev.zoom, 9) }));
+    }
+  }, [focusPosition]);
+
+  const railDataFiltered = useMemo(() => {
+    if (!railGeojson) return { type: 'FeatureCollection', features: [] };
+    if (!routeOperators || routeOperators.length === 0) return railGeojson;
+    const feats = railGeojson.features.filter((f: any) => {
+      const op = f?.properties?.N02_004 as string | undefined;
+      return routeOperators.includes(op ?? '');
+    });
+    return { ...railGeojson, features: feats };
+  }, [railGeojson, routeOperators]);
 
   type StationPoint = { position: [number, number]; name?: string; id?: string };
 
@@ -237,19 +271,6 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
   }, [stationPointsAggregatedAll, stationNameFrequency]);
 
   // Grid-based spatial sampling: keeps at most one point per cell
-  const gridSample = (points: StationPoint[], cellDeg: number): StationPoint[] => {
-    const q = (v: number) => Math.round(v / cellDeg);
-    const seen = new Set<string>();
-    const out: StationPoint[] = [];
-    for (const p of points) {
-      const key = `${q(p.position[0])}:${q(p.position[1])}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(p);
-    }
-    return out;
-  };
-
   const stationPointsMajor = useMemo<StationPoint[]>(() => {
     if (stationPointsAggregatedAll.length === 0) return [] as StationPoint[];
     const majors: StationPoint[] = [];
@@ -262,6 +283,11 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
     }
     return majors;
   }, [stationPointsAggregatedAll, stationNameFrequency]);
+
+  // 1km / 2km グリッドでのサンプリングを事前計算（パフォーマンス向上）
+  const majorSampled1km = useMemo(() => gridSample(stationPointsMajor, 0.01), [stationPointsMajor]);
+  const majorSampled1_5km = useMemo(() => gridSample(stationPointsMajor, 0.015), [stationPointsMajor]);
+  const frequentSampled2km = useMemo(() => gridSample(stationPointsFrequent, 0.02), [stationPointsFrequent]);
 
   // TextLayer用の文字セット（日本語対応）
   // 駅名に含まれる全ての文字からユニークな配列を生成
@@ -285,11 +311,32 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
 
   // ズームレベルに応じた駅データのフィルタリング  
   const visibleStations = useMemo(() => {
-    if (viewState.zoom >= 13) return stationPointsAggregatedAll; // 詳細表示
-    if (viewState.zoom >= 11) return gridSample(stationPointsMajor, 0.01); // 中間表示 (約1km グリッド)
-    if (viewState.zoom >= 8) return gridSample(stationPointsFrequent, 0.02); // 広域表示 (約2km グリッド)
-    return [];
-  }, [stationPointsAggregatedAll, stationPointsMajor, stationPointsFrequent, viewState.zoom]);
+    const base: StationPoint[] = stationPointsAggregatedAll; // 全駅表示
+
+    // 必ず表示するステーション (選択済)
+    const mustShow: StationPoint[] = [];
+    if (selected?.origin) mustShow.push(selected.origin);
+    if (selected?.destination) mustShow.push(selected.destination);
+    if (selected?.vias?.length) mustShow.push(...selected.vias);
+
+    if (mustShow.length === 0) return base;
+
+    // id または座標で重複排除
+    const seen = new Set<string>();
+    const out: StationPoint[] = [...base];
+    for (const p of base) {
+      const key = p.id ?? `${p.position[0]},${p.position[1]}`;
+      seen.add(key);
+    }
+    for (const p of mustShow) {
+      const key = p.id ?? `${p.position[0]},${p.position[1]}`;
+      if (!seen.has(key)) {
+        out.push(p);
+        seen.add(key);
+      }
+    }
+    return out;
+  }, [stationPointsAggregatedAll, selected]);
 
   const hasRoute = Boolean(routeGeojson?.features?.length);
 
@@ -321,7 +368,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
     // 基本の鉄道路線は検索結果表示時は隠す
     new GeoJsonLayer({
       id: 'railway-geojson',
-      data: railGeojson ?? { type: 'FeatureCollection', features: [] },
+      data: railDataFiltered,
       stroked: true,
       filled: false,
       lineWidthUnits: 'pixels',
@@ -329,7 +376,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       getLineWidth: 2.5,
       pickable: true,
       parameters: { depthTest: false },
-      visible: !hasRoute && viewState.zoom >= 5,
+      visible: (routeOperators && routeOperators.length > 0 ? true : !hasRoute) && viewState.zoom >= 5,
     }),
     // 選択中のルート線
     new GeoJsonLayer({
@@ -338,11 +385,11 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       stroked: true,
       filled: false,
       lineWidthUnits: 'pixels',
-      getLineColor: [20, 120, 240, 230],
+      getLineColor: (f: any) => colorForRouteName((f.properties?.operators?.[0] as string) ?? undefined),
       getLineWidth: 4,
       pickable: false,
       parameters: { depthTest: false },
-      visible: Boolean(routeGeojson?.features?.length),
+      visible: false,
     }),
     // 駅の点表示（全体） 検索結果表示時は非表示
     new ScatterplotLayer({
@@ -357,11 +404,12 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
         onClick: (info: any) => {
           const obj = info?.object;
           if (!obj) return;
+          const coordId = `${obj.position[0]},${obj.position[1]}`;
           const station: StationSelection = {
-          id: obj.id ?? '',
-          name: obj.name ?? '',
-          position: obj.position as [number, number],
-        };
+            id: obj.id && obj.id !== '' ? obj.id : coordId,
+            name: obj.name ?? '',
+            position: obj.position as [number, number],
+          };
         onStationClick?.(station);
       },
       parameters: { depthTest: false },
@@ -414,7 +462,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       fontFamily: 'system-ui, -apple-system, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "Yu Gothic", "游ゴシック", Meiryo, メイリオ, "MS PGothic", "MS Gothic", sans-serif',
       fontWeight: 400,
       sizeUnits: 'pixels',
-      getSize: viewState.zoom >= 13 ? 18 : 14,
+      getSize: 14,
       getAngle: 0,
       getTextAnchor: 'start',
       getPixelOffset: [8, 0],
@@ -423,6 +471,8 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       background: true,
       getBackgroundColor: [255, 255, 255, 220],
       backgroundPadding: [2, 1, 2, 1],
+      collisionEnabled: visibleStations.length <= 1500,
+      collisionPadding: [4, 4],
       parameters: { 
         depthTest: false,
       },
@@ -437,13 +487,35 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
   ];
 
   return (
-    <DeckGL
-      initialViewState={INITIAL_VIEW_STATE}
-      viewState={viewState}
-      onViewStateChange={({ viewState }) => setViewState(viewState as typeof INITIAL_VIEW_STATE)}
-      controller={true}
-      layers={layers}
-      style={{ width: '100%', height: '100%' }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <DeckGL
+        initialViewState={INITIAL_VIEW_STATE}
+        viewState={viewState}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onViewStateChange={({ viewState: vs }: any) => {
+          // 位置のみ更新し、ズームは固定
+          setViewState((prev) => ({ ...prev, longitude: vs.longitude, latitude: vs.latitude }));
+        }}
+        controller={{ scrollZoom: false, dragPan: true, dragRotate: false, touchZoom: false, doubleClickZoom: false, keyboard: false }}
+        layers={layers}
+        style={{ width: '100%', height: '100%' }}
+      />
+      {/* Debug zoom display */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 4,
+          right: 4,
+          background: 'rgba(0,0,0,0.5)',
+          color: '#fff',
+          padding: '2px 6px',
+          fontSize: 12,
+          borderRadius: 4,
+          pointerEvents: 'none',
+        }}
+      >
+        z {viewState.zoom.toFixed(2)}
+      </div>
+    </div>
   );
 }

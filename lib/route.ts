@@ -199,7 +199,13 @@ export type FindRouteOptions = {
 
 export type RouteResult = {
   geojson: FeatureCollection<LineString>;
-  summary: { fareTotal: number; timeTotal: number; distanceTotal: number };
+  summary: {
+    fareTotal: number;
+    timeTotal: number;
+    distanceTotal: number;
+    operators: string[];
+    passes: string[];
+  };
 };
 
 export async function findRoute({
@@ -209,6 +215,7 @@ export async function findRoute({
   priority = 'optimal',
 }: FindRouteOptions): Promise<RouteResult> {
   await initGraph();
+  const overallOperators = new Set<string>();
   const points = [originId, ...viaIds, destinationId];
   const features: Feature<LineString>[] = [];
   let fareTotal = 0;
@@ -233,11 +240,25 @@ export async function findRoute({
     const path = dijkstra(startNode, endNode, costFn, allowOp);
     // 経路の実距離を算出
     const coords = path.map((id) => nodeCoords.get(id)!) as Position[];
+    // 区間内で利用する事業者を抽出
+    const segOperators = new Set<string>();
+    for (let j = 0; j < path.length - 1; j++) {
+      const edges = adjacency.get(path[j]) ?? [];
+      const edge = edges.find((e) => e.to === path[j + 1]);
+      if (edge) segOperators.add(edge.operator);
+    }
+    const operatorsArr = Array.from(segOperators);
     const segDist = coords.reduce((acc, cur, idx) => {
       if (idx === 0) return 0;
       return acc + haversine(coords[idx - 1], cur);
     }, 0);
     distanceTotal += segDist;
+
+    // 駅数カウント：path の各 nodeId が stationNode の値に含まれるか確認
+    const stationNodeSet = new Set<string>();
+    for (const [, nid] of stationNode) stationNodeSet.add(nid);
+    let stationCountSeg = 0;
+    for (const nid of path) if (stationNodeSet.has(nid)) stationCountSeg++;
 
     const fareSeg = fareFromDistance(segDist);
     const timeSeg = timeFromDistance(segDist);
@@ -252,14 +273,19 @@ export async function findRoute({
         fare: fareSeg,
         time: timeSeg,
         distance: segDist,
-        stationCount: coords.length,
+        stationCount: stationCountSeg,
+        operators: operatorsArr,
       },
       geometry: { type: 'LineString', coordinates: coords },
     });
+    // 全体 operators 集約
+    for (const op of operatorsArr) overallOperators.add(op);
   }
+  // ---- パス候補 ----
+  const passes = await suggestPasses(Array.from(overallOperators));
   return {
     geojson: { type: 'FeatureCollection', features },
-    summary: { fareTotal, timeTotal, distanceTotal },
+    summary: { fareTotal, timeTotal, distanceTotal, operators: Array.from(overallOperators), passes },
   };
 }
 
@@ -273,5 +299,24 @@ function fareFromDistance(m: number): number {
 const SPEED_KMPH = 60; // 仮平均速度
 function timeFromDistance(m: number): number {
   return (m / 1000) / SPEED_KMPH * 60; // minutes
+}
+
+// 簡易パス候補選定: 全 operators をカバーするパスを返す
+async function suggestPasses(operators: string[]): Promise<string[]> {
+  try {
+    const passPath = path.join(process.cwd(), 'data', 'pass', 'free_passes.geojson');
+    const json = JSON.parse(await fs.readFile(passPath, 'utf-8')) as any;
+    const result: string[] = [];
+    for (const f of json.features ?? []) {
+      const include = f.properties?.rules?.include as any[] | undefined;
+      if (!include) continue;
+      const incOps = include.map((i) => i.operator).filter(Boolean) as string[];
+      const coversAll = operators.every((op) => incOps.includes(op));
+      if (coversAll) result.push(f.properties?.name ?? f.properties?.id);
+    }
+    return result.slice(0, 10);
+  } catch {
+    return [];
+  }
 }
 

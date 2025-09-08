@@ -110,7 +110,7 @@ export default function MapWithSidebar() {
         routeResult={routeResult}
       />
       <div className="flex-1 relative">
-        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} />
+        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} />
         {loading && (
           <div className="absolute top-2 right-2 bg-white px-3 py-1 text-xs shadow">計算中...</div>
         )}

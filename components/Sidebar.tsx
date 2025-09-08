@@ -3,6 +3,39 @@
 import { Button } from "@/components/ui/button";
 import type { SelectionMode, SelectedStations } from "@/components/Map/types";
 import type { RouteResult } from "@/lib/route";
+import { FaCircle } from "react-icons/fa";
+// Timeline component
+const RouteTimeline = ({ selection, routeResult }: { selection: SelectedStations; routeResult: RouteResult }) => {
+  const stations = [
+    selection.origin,
+    ...selection.vias,
+    selection.destination,
+  ].filter(Boolean);
+  return (
+    <div className="space-y-4">
+      {stations.map((s, idx) => (
+        <div key={s!.id + idx} className="flex items-start gap-3">
+          {/* timeline bar */}
+          <div className="flex flex-col items-center">
+            <FaCircle className="text-primary w-3 h-3" />
+            {idx !== stations.length - 1 && <div className="flex-1 w-px bg-slate-300 mt-0.5" />}
+          </div>
+          {/* station + segment info */}
+          <div className="flex-1">
+            <div className="font-medium text-sm">{s!.name}</div>
+            {/* segment */}
+            {idx < routeResult.geojson.features.length && (
+              <div className="ml-1 mt-1 mb-3 rounded bg-slate-50 p-2 text-xs space-y-0.5">
+                <div>路線: {routeResult.geojson.features[idx].properties?.operators?.join(', ') ?? '不明'}</div>
+                <div>通過駅数: {routeResult.geojson.features[idx].properties?.stationCount ?? 0}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 type Props = {
   mode: SelectionMode;
@@ -73,36 +106,9 @@ export default function Sidebar({
 
       {/* 検索結果 */}
       {routeResult && (
-        <div className="space-y-2 text-sm mt-4 overflow-y-auto max-h-60 pr-1">
+        <div className="space-y-2 mt-4 overflow-y-auto max-h-60 pr-1">
           <h3 className="text-base font-semibold">検索結果</h3>
-          {/* 経由駅名リスト */}
-          {selection.vias.length > 0 && (
-            <div className="text-sm">
-              <div className="text-xs text-muted-foreground">経由駅</div>
-              <ul className="list-disc list-inside">
-                {selection.vias.map((v) => (
-                  <li key={v.id}>{v.name}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* 区間情報 */}
-          {routeResult.geojson.features.map((f) => (
-            <div key={f.properties?.seq} className="border rounded p-2 space-y-0.5">
-              <div className="text-xs text-muted-foreground">区間 {f.properties?.seq + 1}</div>
-              <div>通過駅数: {f.properties?.stationCount}</div>
-              <div>距離: {(f.properties?.distance / 1000).toFixed(1)} km</div>
-              <div>推定時間: {f.properties?.time.toFixed(1)} 分</div>
-            </div>
-          ))}
-
-          {/* 利用路線名 / きっぷ名（簡易） */}
-          <div className="text-xs text-muted-foreground">※ 路線名・きっぷ名の判定は開発中</div>
-          <div className="border-t pt-2 text-sm font-medium">
-            合計時間: {routeResult.summary.timeTotal.toFixed(1)} 分<br />
-            合計距離: {(routeResult.summary.distanceTotal / 1000).toFixed(1)} km
-          </div>
+          <RouteTimeline selection={selection} routeResult={routeResult} />
         </div>
       )}
 

@@ -10,6 +10,7 @@ export type DeckMapProps = {
   onStationClick?: (station: StationSelection) => void;
   selected?: SelectedStations;
   routeGeojson?: any;
+  routeOperators?: string[];
 };
 
 export const Map = (props: DeckMapProps) => {

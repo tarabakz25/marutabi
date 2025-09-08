@@ -35,8 +35,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const origin = body?.origin as string | undefined;
-    const destination = body?.destination as string | undefined;
+    let origin = body?.origin as string | undefined;
+    let destination = body?.destination as string | undefined;
+    const originPos = body?.originPos as [number, number] | undefined;
+    const destPos = body?.destinationPos as [number, number] | undefined;
+    if (!origin && originPos) origin = `${originPos[0]},${originPos[1]}`;
+    if (!destination && destPos) destination = `${destPos[0]},${destPos[1]}`;
     const viaParam = body?.via as string[] | string | undefined;
     const via = Array.isArray(viaParam) ? viaParam : viaParam ? [viaParam] : [];
     if (!origin || !destination) {

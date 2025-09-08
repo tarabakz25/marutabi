@@ -16,4 +16,6 @@ export type SelectedStations = {
   vias: StationSelection[];
 };
 
+export type FocusPosition = LngLat | null;
+
 
