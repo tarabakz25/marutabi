@@ -1,0 +1,1098 @@
+{
+  "type": "FeatureCollection",
+  "name": "japan_free_rail_passes",
+  "created_at": "2025-09-08",
+  "description": "日本国内の主要フリーきっぷ（路線カバレッジはproperties.rulesで表現。geometryは未付与）。",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "seishun18_3d_5d",
+        "name": "青春18きっぷ（3日・5日連続版）",
+        "issuer": "JRグループ",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "consecutive_days",
+          "days_options": [
+            3,
+            5
+          ],
+          "seasonal": true
+        },
+        "price_note": "発売期・種別により変動。新幹線・特急は不可。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR",
+              "area": "Japan",
+              "service": [
+                "local",
+                "rapid"
+              ],
+              "network": "conventional"
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen",
+                "LimitedExpress",
+                "RapidLtdExp"
+              ]
+            },
+            {
+              "operator_type": "third-sector"
+            }
+          ],
+          "notes": "JR在来線の普通・快速自由席のみ有効。"
+        },
+        "sources": [
+          "https://www.jreast.co.jp/tickets/info.aspx?GoodsCd=2436"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "aki_norihodai_pass",
+        "name": "秋の乗り放題パス",
+        "issuer": "JRグループ",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 3,
+          "seasonal": true,
+          "season": "autumn"
+        },
+        "price_note": "大人7千円台〜。新幹線・特急は不可（年により条件差異あり）。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR",
+              "area": "Japan",
+              "service": [
+                "local",
+                "rapid"
+              ],
+              "network": "conventional"
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen",
+                "LimitedExpress"
+              ]
+            }
+          ],
+          "notes": "発売年の注意事項に依存。"
+        },
+        "sources": [
+          "https://www.jr-odekake.net/railroad/ticket/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "japan_rail_pass",
+        "name": "JAPAN RAIL PASS（訪日客専用）",
+        "issuer": "JRグループ",
+        "eligibility": "訪日観光客専用",
+        "validity": {
+          "type": "consecutive_days",
+          "days_options": [
+            7,
+            14,
+            21
+          ]
+        },
+        "price_note": "のぞみ・みずほは不可。その他新幹線・特急可。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR",
+              "area": "Japan",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress",
+                "Shinkansen"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "train_names": [
+                "のぞみ",
+                "みずほ"
+              ]
+            }
+          ],
+          "notes": "宮島フェリー含む（JR西日本宮島フェリー）。"
+        },
+        "sources": [
+          "https://japanrailpass.net/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "hk_east_pass",
+        "name": "北海道＆東日本パス",
+        "issuer": "JR北海道・JR東日本",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 7,
+          "seasonal": true
+        },
+        "price_note": "青い森・IGR・北越急行の普通も含む。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Hokkaido",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "JR East",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "Aoimori Railway",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "IGR Iwate Galaxy Railway",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "Hokuetsu Express",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            }
+          ],
+          "conditional_include": [
+            {
+              "segment": "Hokkaido Shinkansen 新青森〜新函館北斗",
+              "service": [
+                "Shinkansen"
+              ],
+              "condition": "別途特急料金支払いで可"
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "LimitedExpress",
+                "Shinkansen"
+              ]
+            }
+          ],
+          "notes": "第三セクターのうち上記3社は普通列車のみ可。"
+        },
+        "sources": [
+          "https://www.jreast.co.jp/tickets/info.aspx?GoodsCd=2317"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "hokkaido_free_pass",
+        "name": "北海道フリーパス",
+        "issuer": "JR北海道",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 7
+        },
+        "price_note": "特急自由席可。新幹線は対象外。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Hokkaido",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ],
+          "notes": "JR北海道バス一部路線も可（高速を除く）。"
+        },
+        "sources": [
+          "https://www.jrhokkaido.co.jp/CM/Otoku/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "oodokyu_pass_east",
+        "name": "大人の休日倶楽部パス（東日本版）",
+        "issuer": "JR東日本",
+        "eligibility": "会員限定（年齢条件）",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 5,
+          "seasonal": true
+        },
+        "price_note": "特急・新幹線・グリーン利用可（エリア内）。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR East",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress",
+                "Shinkansen",
+                "Green"
+              ]
+            }
+          ],
+          "notes": "発売回により設定日異なる。"
+        },
+        "sources": [
+          "https://www.jreast.co.jp/otona/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "oodokyu_pass_east_hkd",
+        "name": "大人の休日倶楽部パス（東日本＆北海道）",
+        "issuer": "JR東日本・JR北海道",
+        "eligibility": "会員限定（年齢条件）",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 5,
+          "seasonal": true
+        },
+        "price_note": "東日本・北海道の新幹線・特急含む。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR East",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress",
+                "Shinkansen",
+                "Green"
+              ]
+            },
+            {
+              "operator": "JR Hokkaido",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "operator": "JR Hokkaido",
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ],
+          "notes": "北海道新幹線は対象外の回もあり。"
+        },
+        "sources": [
+          "https://www.jreast.co.jp/otona/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "nojiri_slow_trip",
+        "name": "東日本のんびり旅パス",
+        "issuer": "JR東日本",
+        "eligibility": "誰でも（えきねっと限定）",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 3,
+          "seasonal": true
+        },
+        "price_note": "在来線普通・快速のみ。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR East",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "LimitedExpress",
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jreast.co.jp/tickets/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "tokyo_23ku_pass",
+        "name": "都区内パス",
+        "issuer": "JR東日本",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "calendar_days",
+          "days": 1
+        },
+        "price_note": "東京23区内のJR在来線。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR East",
+              "area": "Tokyo 23 wards",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jreast.co.jp/tickets/info.aspx?txt_keyword=都区内パス"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "holiday_suica_pass",
+        "name": "のんびりホリデーSuicaパス",
+        "issuer": "JR東日本",
+        "eligibility": "誰でも（Suica等）",
+        "validity": {
+          "type": "calendar_days",
+          "days": 1,
+          "holiday_only": true
+        },
+        "price_note": "東京近郊エリア広域＋モノレール＋りんかい線。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR East",
+              "area": "Tokyo Metropolitan Area",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "Tokyo Monorail",
+              "service": [
+                "all"
+              ]
+            },
+            {
+              "operator": "TWR Rinkai Line",
+              "service": [
+                "all"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jreast.co.jp/tickets/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "holiday_odekake_pass",
+        "name": "休日おでかけパス",
+        "issuer": "JR東日本",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "calendar_days",
+          "days": 1,
+          "holiday_only": true
+        },
+        "price_note": "紙きっぷ版。Suica版と同エリア。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR East",
+              "area": "Tokyo Metropolitan Area",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "Tokyo Monorail",
+              "service": [
+                "all"
+              ]
+            },
+            {
+              "operator": "TWR Rinkai Line",
+              "service": [
+                "all"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jreast.co.jp/tickets/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "yokohama_minatomirai_pass",
+        "name": "ヨコハマ・みなとみらいパス",
+        "issuer": "JR東日本・横浜高速鉄道",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "calendar_days",
+          "days": 1
+        },
+        "price_note": "根岸線（横浜〜新杉田）＋みなとみらい線全線。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR East",
+              "line": "Negishi Line",
+              "segment": "Yokohama–Shinsugita"
+            },
+            {
+              "operator": "Minatomirai Line",
+              "segment": "Yokohama–Motomachi-Chukagai"
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jreast.co.jp/tickets/info.aspx?GoodsCd=2572"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "monorail_tokunai",
+        "name": "モノレール＆都区内パス",
+        "issuer": "JR東日本・東京モノレール",
+        "eligibility": "誰でも（モバイルSuica限定）",
+        "validity": {
+          "type": "calendar_days",
+          "days": 1,
+          "holiday_bias": true
+        },
+        "price_note": "都区内JR＋東京モノレール全線。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR East",
+              "area": "Tokyo 23 wards",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "Tokyo Monorail",
+              "service": [
+                "all"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jreast.co.jp/tickets/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "tokyo_metro_24h",
+        "name": "東京メトロ24時間券",
+        "issuer": "東京メトロ",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "hours",
+          "hours": 24
+        },
+        "price_note": "メトロ9路線 24時間乗り放題。",
+        "rules": {
+          "include": [
+            {
+              "operator": "Tokyo Metro",
+              "service": [
+                "all"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.tokyometro.jp/ticket/oneday/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "toei_summer_1day",
+        "name": "都営地下鉄 夏のワンデーパス",
+        "issuer": "東京都交通局",
+        "eligibility": "誰でも（期間限定）",
+        "validity": {
+          "type": "calendar_days",
+          "days": 1,
+          "seasonal": true
+        },
+        "price_note": "都営地下鉄4路線 1日乗り放題。",
+        "rules": {
+          "include": [
+            {
+              "operator": "Toei Subway",
+              "service": [
+                "all"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.kotsu.metro.tokyo.jp/subway/fare/discount.html"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "jr_tokai_summer",
+        "name": "JR東海☆夏の乗り放題きっぷ",
+        "issuer": "JR東海",
+        "eligibility": "誰でも（期間限定）",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 2,
+          "seasonal": true
+        },
+        "price_note": "JR東海の在来線 2日乗り放題。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Central",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://jr-central.co.jp/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "noritetsu_tabikippu",
+        "name": "JR東海＆16私鉄 乗り鉄☆たびきっぷ",
+        "issuer": "JR東海＋16社",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 2
+        },
+        "price_note": "JR東海在来線＋中部の主要私鉄がフリー。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Central",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "Meitetsu"
+            },
+            {
+              "operator": "Kintetsu"
+            },
+            {
+              "operator": "Nankai"
+            },
+            {
+              "operator": "Shizutetsu"
+            },
+            {
+              "operator": "Enshu Railway"
+            },
+            {
+              "operator": "Aichi Loop Railway"
+            },
+            {
+              "operator": "Yoro Railway"
+            },
+            {
+              "operator": "Izu Kyuko"
+            },
+            {
+              "operator": "Izuhakone Railway"
+            },
+            {
+              "operator": "Sangi Railway"
+            },
+            {
+              "operator": "Nagaragawa Railway"
+            },
+            {
+              "operator": "Akechi Railway"
+            },
+            {
+              "operator": "Tenryu Hamanako Railroad"
+            },
+            {
+              "operator": "Ise Railway"
+            },
+            {
+              "operator": "Yokkaichi Asunarou Railway"
+            },
+            {
+              "operator": "Toyohashi Railroad"
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://jr-central.co.jp/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "aozora_free_pass",
+        "name": "青空フリーパス",
+        "issuer": "JR東海",
+        "eligibility": "誰でも（主に土休日）",
+        "validity": {
+          "type": "calendar_days",
+          "days": 1
+        },
+        "price_note": "名古屋・三重・岐阜・滋賀など中京広域。伊勢鉄道含む。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Central",
+              "area": "Chukyo Area",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            },
+            {
+              "operator": "Ise Railway",
+              "service": [
+                "all"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://railway.jr-central.co.jp/tickets/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "shizuoka_holiday_free",
+        "name": "休日乗り放題きっぷ（静岡エリア）",
+        "issuer": "JR東海",
+        "eligibility": "誰でも（主に土休日）",
+        "validity": {
+          "type": "calendar_days",
+          "days": 1
+        },
+        "price_note": "静岡県内JR中心のフリー。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Central",
+              "area": "Shizuoka Area",
+              "service": [
+                "local",
+                "rapid"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://railway.jr-central.co.jp/tickets/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "three_three_sun",
+        "name": "3・3・SUNフリーきっぷ（近鉄・南海・名鉄）",
+        "issuer": "近鉄・南海・名鉄",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "consecutive_days",
+          "days_options": [
+            2,
+            3
+          ]
+        },
+        "price_note": "3社全線フリー（特急は別料金）。",
+        "rules": {
+          "include": [
+            {
+              "operator": "Kintetsu"
+            },
+            {
+              "operator": "Nankai"
+            },
+            {
+              "operator": "Meitetsu"
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "LimitedExpress"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.kintetsu.co.jp/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "shikoku_free",
+        "name": "四国フリーきっぷ",
+        "issuer": "JR四国",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 3
+        },
+        "price_note": "JR四国全線＋土佐くろしお（普通）。特急自由席可。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Shikoku",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress"
+              ]
+            },
+            {
+              "operator": "Tosa Kuroshio Railway",
+              "service": [
+                "local"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jr-shikoku.co.jp/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "shikoku_green",
+        "name": "四国グリーン紀行",
+        "issuer": "JR四国",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "consecutive_days",
+          "days": 3
+        },
+        "price_note": "四国全線のグリーン・指定席も可。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Shikoku",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress",
+                "Green"
+              ]
+            },
+            {
+              "operator": "Tosa Kuroshio Railway",
+              "service": [
+                "all"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jr-shikoku.co.jp/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "tabimeijin_kyushu",
+        "name": "旅名人の九州満喫きっぷ（3回分）",
+        "issuer": "JR九州",
+        "eligibility": "誰でも",
+        "validity": {
+          "type": "1day_x3",
+          "shareable": true
+        },
+        "price_note": "JR九州の普通・快速・一部特急自由席可（最新条件要確認）。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Kyushu",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress"
+              ]
+            }
+          ],
+          "exclude": [
+            {
+              "service": [
+                "Shinkansen"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jrkyushu.co.jp/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "kumamoto_jr_round",
+        "name": "くまもっとJR周遊きっぷ",
+        "issuer": "JR九州",
+        "eligibility": "誰でも（要予約）",
+        "validity": {
+          "type": "consecutive_days",
+          "days_options": [
+            2,
+            3
+          ],
+          "area": "Kumamoto Pref."
+        },
+        "price_note": "熊本県内のJR。在来線＋新幹線熊本〜新八代含む。指定席回数付与。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Kyushu",
+              "area": "Kumamoto Pref.",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress"
+              ]
+            },
+            {
+              "operator": "JR Kyushu",
+              "line": "Kyushu Shinkansen",
+              "segment": "Kumamoto–Shin-Yatsushiro"
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jrkyushu.co.jp/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "goquest_seikyushu",
+        "name": "GO QUEST 西九州フリーきっぷ",
+        "issuer": "JR九州（佐賀・長崎）",
+        "eligibility": "誰でも（期間限定・デジタル）",
+        "validity": {
+          "type": "consecutive_days",
+          "days_options": [
+            2,
+            3
+          ],
+          "seasonal": true
+        },
+        "price_note": "西九州新幹線かもめ＋佐賀・長崎の在来線、指定席回数付き。",
+        "rules": {
+          "include": [
+            {
+              "operator": "JR Kyushu",
+              "line": "Nishi-Kyushu Shinkansen",
+              "segment": "Takeo-onsen–Nagasaki"
+            },
+            {
+              "operator": "JR Kyushu",
+              "area": "Saga & Nagasaki Prefs.",
+              "service": [
+                "local",
+                "rapid",
+                "LimitedExpress"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          "https://www.jrkyushu.co.jp/"
+        ],
+        "schema_version": "0.1-rules-only"
+      }
+    }
+  ]
+}
