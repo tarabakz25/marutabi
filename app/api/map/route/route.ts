@@ -12,9 +12,18 @@ export async function GET(req: NextRequest) {
     if (!origin || !destination) {
       return NextResponse.json({ error: 'origin and destination are required' }, { status: 400 });
     }
-    const geojson = await findRoute({ originId: origin, destinationId: destination, viaIds: via });
-    return NextResponse.json(geojson, {
-      headers: { 'content-type': 'application/geo+json; charset=utf-8' },
+    const priority = (searchParams.get('priority') as 'time' | 'cost' | 'optimal') ?? 'optimal';
+    const passIdsParam = searchParams.get('passIds') ?? '';
+    const passIds = passIdsParam ? passIdsParam.split(',') : [];
+    const result = await findRoute({
+      originId: origin,
+      destinationId: destination,
+      viaIds: via,
+      priority,
+      passIds,
+    });
+    return NextResponse.json(result, {
+      headers: { 'content-type': 'application/json; charset=utf-8' },
     });
   } catch (e) {
     console.error('Failed to calculate route:', e);
@@ -32,9 +41,18 @@ export async function POST(req: NextRequest) {
     if (!origin || !destination) {
       return NextResponse.json({ error: 'origin and destination are required' }, { status: 400 });
     }
-    const geojson = await findRoute({ originId: origin, destinationId: destination, viaIds: via });
-    return NextResponse.json(geojson, {
-      headers: { 'content-type': 'application/geo+json; charset=utf-8' },
+    const priority = (body?.priority as 'time' | 'cost' | 'optimal') ?? 'optimal';
+    const passIdsCsv = body?.passIds as string | undefined;
+    const passIds = passIdsCsv ? passIdsCsv.split(',') : [];
+    const result = await findRoute({
+      originId: origin,
+      destinationId: destination,
+      viaIds: via,
+      priority,
+      passIds,
+    });
+    return NextResponse.json(result, {
+      headers: { 'content-type': 'application/json; charset=utf-8' },
     });
   } catch (e) {
     console.error('Failed to calculate route:', e);
