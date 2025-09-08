@@ -14,7 +14,7 @@ export default function TripSharePage({ params }: { params: { id: string } }) {
     setShareUrl(url);
     const fetchQr = async () => {
       try {
-        const res = await fetch(`/share?url=${encodeURIComponent(url)}`);
+        const res = await fetch(`/api/share?url=${encodeURIComponent(url)}`);
         if (res.ok) {
           const data = await res.json();
           setQrUrl(data.qrUrl as string);
