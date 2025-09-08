@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Only expose explicitly whitelisted environment variables to the client.
+  // EKS_API_KEY is intentionally omitted so it remains server-side only.
+  env: {},
   images: {
     remotePatterns: [
       {

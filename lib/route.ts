@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { FeatureCollection, LineString, Position, Feature } from 'geojson';
+import { getCourse, type Priority } from './ekispert';
 
 // Graph structures
 interface Edge { to: string; weight: number; }
@@ -130,12 +131,27 @@ export type FindRouteOptions = {
   originId: string;
   destinationId: string;
   viaIds?: string[];
+  priority?: Priority;
+  passIds?: string[];
 };
 
-export async function findRoute({ originId, destinationId, viaIds = [] }: FindRouteOptions): Promise<FeatureCollection<LineString>> {
+export type RouteResult = {
+  geojson: FeatureCollection<LineString>;
+  summary: { fareTotal: number; timeTotal: number };
+};
+
+export async function findRoute({
+  originId,
+  destinationId,
+  viaIds = [],
+  priority = 'optimal',
+  passIds = [],
+}: FindRouteOptions): Promise<RouteResult> {
   await initGraph();
   const points = [originId, ...viaIds, destinationId];
   const features: Feature<LineString>[] = [];
+  let fareTotal = 0;
+  let timeTotal = 0;
   for (let i = 0; i < points.length - 1; i++) {
     const startNode = stationNode.get(points[i]);
     const endNode = stationNode.get(points[i + 1]);
@@ -144,12 +160,25 @@ export async function findRoute({ originId, destinationId, viaIds = [] }: FindRo
     }
     const path = dijkstra(startNode, endNode);
     const coords = path.map((id) => nodeCoords.get(id)!) as Position[];
+    const course = await getCourse(points[i], points[i + 1], priority, passIds);
+    fareTotal += course.fare;
+    timeTotal += course.time;
     features.push({
       type: 'Feature',
-      properties: { from: points[i], to: points[i + 1], seq: i },
+      properties: {
+        from: points[i],
+        to: points[i + 1],
+        seq: i,
+        fare: course.fare,
+        time: course.time,
+        distance: course.distance,
+      },
       geometry: { type: 'LineString', coordinates: coords },
     });
   }
-  return { type: 'FeatureCollection', features };
+  return {
+    geojson: { type: 'FeatureCollection', features },
+    summary: { fareTotal, timeTotal },
+  };
 }
 
