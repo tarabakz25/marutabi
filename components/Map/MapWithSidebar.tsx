@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { Map } from "@/components/Map";
 import type { SelectedStations, StationSelection, SelectionMode } from "./types";
+import type { RouteResult } from "@/lib/route";
 
 export default function MapWithSidebar() {
   const [mode, setMode] = useState<SelectionMode>("origin");
@@ -42,6 +43,7 @@ export default function MapWithSidebar() {
   };
 
   const [routeGeojson, setRouteGeojson] = useState<any>({ type: "FeatureCollection", features: [] });
+  const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchToken, setSearchToken] = useState<number>(0);
@@ -69,16 +71,24 @@ export default function MapWithSidebar() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams();
-        params.set("origin", selection.origin!.id);
-        params.set("destination", selection.destination!.id);
-        for (const v of selection.vias) params.append("via", v.id);
-        const res = await fetch(`/api/map/route?${params.toString()}`);
+        const body = {
+          origin: selection.origin!.id,
+          destination: selection.destination!.id,
+          via: selection.vias.map((v) => v.id),
+          priority: "optimal",
+        };
+        const res = await fetch(`/api/map/route`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
         if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        setRouteGeojson(data);
+        const data: RouteResult = await res.json();
+        setRouteGeojson(data.geojson);
+        setRouteResult(data);
       } catch (e) {
         setRouteGeojson({ type: "FeatureCollection", features: [] });
+        setRouteResult(null);
         const msg = e instanceof Error ? e.message : String(e);
         setError(msg);
       } finally {
@@ -97,6 +107,7 @@ export default function MapWithSidebar() {
         onClearAll={handleClearAll}
         onRemoveVia={handleRemoveVia}
         onSearch={handleSearch}
+        routeResult={routeResult}
       />
       <div className="flex-1 relative">
         <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} />

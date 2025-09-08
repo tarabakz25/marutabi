@@ -1,14 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { MinHeap } from 'heap-js';
+// import { MinHeap } from 'heap-js';  // Removed to use local implementation
 
-// 簡易最小ヒープ（外部依存を避ける）
-class MinHeap<T> {
+// 簡易最小ヒープ — 開発時のホットリロードで再評価されても重複定義しないよう global キャッシュ
+class LocalMinHeap<T> {
   private data: T[] = [];
   constructor(private cmp: (a: T, b: T) => number) {}
-  size() {
-    return this.data.length;
-  }
+  size() { return this.data.length; }
   push(item: T) {
     this.data.push(item);
     this.bubbleUp(this.data.length - 1);
@@ -45,6 +43,7 @@ class MinHeap<T> {
     }
   }
 }
+
 import type { FeatureCollection, LineString, Position, Feature } from 'geojson';
 // オフライン推定の優先基準
 export type Priority = 'optimal' | 'cost' | 'time';
@@ -159,7 +158,7 @@ type CostFn = (dist: number) => number;
 function dijkstra(start: string, goal: string, costFn: CostFn, allowOperator: (op: string) => boolean): string[] {
   const dist = new Map<string, number>();
   const prev = new Map<string, string | null>();
-  const pq = new MinHeap<[string, number]>((a, b) => a[1] - b[1]);
+  const pq = new LocalMinHeap<[string, number]>((a, b) => a[1] - b[1]);
   const push = (id: string, d: number) => {
     pq.push([id, d]);
   };

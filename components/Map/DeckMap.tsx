@@ -236,6 +236,20 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
     return frequent.slice(0, 800);
   }, [stationPointsAggregatedAll, stationNameFrequency]);
 
+  // Grid-based spatial sampling: keeps at most one point per cell
+  const gridSample = (points: StationPoint[], cellDeg: number): StationPoint[] => {
+    const q = (v: number) => Math.round(v / cellDeg);
+    const seen = new Set<string>();
+    const out: StationPoint[] = [];
+    for (const p of points) {
+      const key = `${q(p.position[0])}:${q(p.position[1])}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+    return out;
+  };
+
   const stationPointsMajor = useMemo<StationPoint[]>(() => {
     if (stationPointsAggregatedAll.length === 0) return [] as StationPoint[];
     const majors: StationPoint[] = [];
@@ -271,11 +285,13 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
 
   // ズームレベルに応じた駅データのフィルタリング  
   const visibleStations = useMemo(() => {
-    if (viewState.zoom >= 13) return stationPointsAggregatedAll;       // 詳細表示
-    if (viewState.zoom >= 11) return stationPointsMajor;              // 中間表示
-    if (viewState.zoom >= 8) return stationPointsFrequent;            // 広域表示
+    if (viewState.zoom >= 13) return stationPointsAggregatedAll; // 詳細表示
+    if (viewState.zoom >= 11) return gridSample(stationPointsMajor, 0.01); // 中間表示 (約1km グリッド)
+    if (viewState.zoom >= 8) return gridSample(stationPointsFrequent, 0.02); // 広域表示 (約2km グリッド)
     return [];
   }, [stationPointsAggregatedAll, stationPointsMajor, stationPointsFrequent, viewState.zoom]);
+
+  const hasRoute = Boolean(routeGeojson?.features?.length);
 
   const layers = [
     new TileLayer({
@@ -302,6 +318,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
         });
       }
     }),
+    // 基本の鉄道路線は検索結果表示時は隠す
     new GeoJsonLayer({
       id: 'railway-geojson',
       data: railGeojson ?? { type: 'FeatureCollection', features: [] },
@@ -312,7 +329,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       getLineWidth: 2.5,
       pickable: true,
       parameters: { depthTest: false },
-      visible: viewState.zoom >= 5,
+      visible: !hasRoute && viewState.zoom >= 5,
     }),
     // 選択中のルート線
     new GeoJsonLayer({
@@ -327,7 +344,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
       parameters: { depthTest: false },
       visible: Boolean(routeGeojson?.features?.length),
     }),
-    // 駅の点表示（全体）
+    // 駅の点表示（全体） 検索結果表示時は非表示
     new ScatterplotLayer({
       id: 'stations',
       data: visibleStations,
@@ -348,7 +365,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson }: Prop
         onStationClick?.(station);
       },
       parameters: { depthTest: false },
-      visible: visibleStations.length > 0,
+      visible: !hasRoute && visibleStations.length > 0,
     }),
     // 選択中の駅（出発/到着/経由）を強調
     new ScatterplotLayer({

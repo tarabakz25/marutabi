@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import type { SelectionMode, SelectedStations } from "@/components/Map/types";
+import type { RouteResult } from "@/lib/route";
 
 type Props = {
   mode: SelectionMode;
@@ -10,6 +11,7 @@ type Props = {
   onClearAll: () => void;
   onRemoveVia: (index: number) => void;
   onSearch: () => void;
+  routeResult?: RouteResult | null;
 };
 
 export default function Sidebar({
@@ -19,6 +21,7 @@ export default function Sidebar({
   onClearAll,
   onRemoveVia,
   onSearch,
+  routeResult,
 }: Props) {
   const isActive = (m: SelectionMode) =>
     mode === m ? "bg-primary text-primary-foreground" : "bg-accent/40";
@@ -67,6 +70,41 @@ export default function Sidebar({
           </div>
         </div>
       </div>
+
+      {/* 検索結果 */}
+      {routeResult && (
+        <div className="space-y-2 text-sm mt-4 overflow-y-auto max-h-60 pr-1">
+          <h3 className="text-base font-semibold">検索結果</h3>
+          {/* 経由駅名リスト */}
+          {selection.vias.length > 0 && (
+            <div className="text-sm">
+              <div className="text-xs text-muted-foreground">経由駅</div>
+              <ul className="list-disc list-inside">
+                {selection.vias.map((v) => (
+                  <li key={v.id}>{v.name}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* 区間情報 */}
+          {routeResult.geojson.features.map((f) => (
+            <div key={f.properties?.seq} className="border rounded p-2 space-y-0.5">
+              <div className="text-xs text-muted-foreground">区間 {f.properties?.seq + 1}</div>
+              <div>通過駅数: {f.properties?.stationCount}</div>
+              <div>距離: {(f.properties?.distance / 1000).toFixed(1)} km</div>
+              <div>推定時間: {f.properties?.time.toFixed(1)} 分</div>
+            </div>
+          ))}
+
+          {/* 利用路線名 / きっぷ名（簡易） */}
+          <div className="text-xs text-muted-foreground">※ 路線名・きっぷ名の判定は開発中</div>
+          <div className="border-t pt-2 text-sm font-medium">
+            合計時間: {routeResult.summary.timeTotal.toFixed(1)} 分<br />
+            合計距離: {(routeResult.summary.distanceTotal / 1000).toFixed(1)} km
+          </div>
+        </div>
+      )}
 
       <div className="mt-auto flex gap-2">
         <Button onClick={onSearch} className="w-full">検索する</Button>
