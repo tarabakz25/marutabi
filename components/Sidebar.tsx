@@ -14,32 +14,167 @@ type StationSearchResult = {
 
 // Timeline component
 const RouteTimeline = ({ selection, routeResult }: { selection: SelectedStations; routeResult: RouteResult }) => {
-  const keyStations = [
-    selection.origin && { ...selection.origin, _type: 'origin' as const },
-    ...selection.vias.map((v) => ({ ...v, _type: 'via' as const })),
-    selection.destination && { ...selection.destination, _type: 'destination' as const },
-  ].filter(Boolean) as Array<SelectedStations['origin'] & { _type: 'origin' | 'via' | 'destination' }>;
+  // 乗り換え駅の情報を取得する関数
+  const getTransferInfo = (transferId: string) => {
+    // まずrouteStationsから検索
+    let station = routeResult.routeStations?.find(s => s.id === transferId);
+    
+    // 見つからない場合は、位置情報から最も近い駅を検索
+    if (!station) {
+      const transfer = routeResult.transfers?.find(t => t.id === transferId);
+      if (transfer) {
+        // 位置情報から最も近い駅を検索
+        const nearestStation = findNearestStation(transfer.position, routeResult.routeStations || []);
+        if (nearestStation) {
+          station = nearestStation;
+        }
+      }
+    }
+    
+    // 最終的なフォールバック処理
+    if (!station) {
+      // 駅IDから駅名を推測（例：駅IDが駅名を含んでいる場合）
+      const fallbackName = transferId.includes('_') ? transferId.split('_').pop() : transferId;
+      return { id: transferId, name: fallbackName || '乗換駅', position: [0, 0] as [number, number] };
+    }
+    
+    return station;
+  };
 
-  const typeLabel = (t: 'origin' | 'via' | 'destination') => ({
+  // 位置情報から最も近い駅を検索する関数
+  const findNearestStation = (targetPos: [number, number], stations: Array<{ id: string; name?: string; position: [number, number] }>) => {
+    let nearest: typeof stations[0] | undefined;
+    let minDistance = Infinity;
+    
+    const haversine = (pos1: [number, number], pos2: [number, number]) => {
+      const R = 6371000; // 地球の半径（メートル）
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      const dLat = toRad(pos2[1] - pos1[1]);
+      const dLon = toRad(pos2[0] - pos1[0]);
+      const lat1 = toRad(pos1[1]);
+      const lat2 = toRad(pos2[1]);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+    
+    for (const station of stations) {
+      const distance = haversine(targetPos, station.position);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearest = station;
+      }
+    }
+    
+    return nearest;
+  };
+
+  // 出発、経由、到着、乗り換えを統合したタイムラインを作成
+  const timelineItems: Array<{
+    id: string;
+    name: string;
+    type: 'origin' | 'via' | 'destination' | 'transfer';
+    position: [number, number];
+    featureIndex?: number;
+    sortOrder: number;
+  }> = [];
+
+  // 基本的な駅の順序を設定
+  let sortOrder = 0;
+
+  // 出発駅を追加
+  if (selection.origin) {
+    timelineItems.push({
+      ...selection.origin,
+      type: 'origin',
+      sortOrder: sortOrder++
+    });
+  }
+
+  // 経由駅を追加
+  selection.vias.forEach((via, index) => {
+    timelineItems.push({
+      ...via,
+      type: 'via',
+      sortOrder: sortOrder++
+    });
+  });
+
+  // 到着駅を追加
+  if (selection.destination) {
+    timelineItems.push({
+      ...selection.destination,
+      type: 'destination',
+      sortOrder: sortOrder++
+    });
+  }
+
+  // 乗り換え駅を適切な位置に挿入
+  const transfers = routeResult?.transfers ?? [];
+  transfers.forEach(transfer => {
+    const transferInfo = getTransferInfo(transfer.id);
+    // 乗り換え駅が既存のタイムラインアイテムと重複しない場合のみ追加
+    const isDuplicate = timelineItems.some(item => item.id === transfer.id);
+    if (!isDuplicate) {
+      // 乗り換え駅を適切な位置に挿入（簡易的に最後に追加）
+      timelineItems.push({
+        id: transferInfo.id,
+        name: transferInfo.name || '乗換駅',
+        type: 'transfer',
+        position: transferInfo.position,
+        sortOrder: sortOrder++
+      });
+    }
+  });
+
+  // タイムラインアイテムをソート（出発→経由→乗り換え→到着の順序を維持）
+  timelineItems.sort((a, b) => {
+    // まず基本的な順序でソート
+    if (a.type === 'origin' && b.type !== 'origin') return -1;
+    if (b.type === 'origin' && a.type !== 'origin') return 1;
+    if (a.type === 'destination' && b.type !== 'destination') return 1;
+    if (b.type === 'destination' && a.type !== 'destination') return -1;
+    
+    // 同じタイプ内ではsortOrderでソート
+    return a.sortOrder - b.sortOrder;
+  });
+
+  const typeLabel = (t: 'origin' | 'via' | 'destination' | 'transfer') => ({
     origin: '出発',
     via: '経由',
     destination: '到着',
+    transfer: '乗換',
+  }[t]);
+
+  const typeColor = (t: 'origin' | 'via' | 'destination' | 'transfer') => ({
+    origin: 'text-green-600',
+    via: 'text-blue-600',
+    destination: 'text-red-600',
+    transfer: 'text-amber-600',
+  }[t]);
+
+  const typeBgColor = (t: 'origin' | 'via' | 'destination' | 'transfer') => ({
+    origin: 'bg-slate-100 text-slate-600',
+    via: 'bg-slate-100 text-slate-600',
+    destination: 'bg-slate-100 text-slate-600',
+    transfer: 'bg-amber-100 text-amber-700',
   }[t]);
 
   return (
     <div className="space-y-4">
-      {keyStations.map((s, idx) => (
-        <div key={s!.id + idx} className="flex items-start gap-3">
+      {timelineItems.map((item, idx) => (
+        <div key={item.id + idx} className="flex items-start gap-3">
           <div className="flex flex-col items-center">
-            <FaCircle className={s._type === 'origin' ? 'text-green-600 w-3 h-3' : s._type === 'destination' ? 'text-red-600 w-3 h-3' : 'text-blue-600 w-3 h-3'} />
-            {idx !== keyStations.length - 1 && <div className="flex-1 w-px bg-slate-300 mt-0.5" />}
+            <FaCircle className={`${typeColor(item.type)} w-3 h-3`} />
+            {idx !== timelineItems.length - 1 && <div className="flex-1 w-px bg-slate-300 mt-0.5" />}
           </div>
           <div className="flex-1">
             <div className="font-medium text-sm">
-              <span className="mr-2 inline-block px-1.5 py-0.5 text-[10px] rounded bg-slate-100 text-slate-600">{typeLabel(s._type)}</span>
-              {s!.name}
+              <span className={`mr-2 inline-block px-1.5 py-0.5 text-[10px] rounded ${typeBgColor(item.type)}`}>
+                {typeLabel(item.type)}
+              </span>
+              {item.name}
             </div>
-            {idx < routeResult.geojson.features.length && (
+            {item.type !== 'transfer' && idx < routeResult.geojson.features.length && (
               <div className="ml-1 mt-1 mb-3 rounded bg-slate-50 p-2 text-xs space-y-0.5">
                 <div>路線: {routeResult.geojson.features[idx].properties?.lineName ?? routeResult.geojson.features[idx].properties?.operators?.join(', ') ?? '不明'}</div>
                 <div>距離: {Math.round(routeResult.geojson.features[idx].properties?.distance ?? 0)} m</div>
@@ -52,60 +187,6 @@ const RouteTimeline = ({ selection, routeResult }: { selection: SelectedStations
   );
 };
 
-const TransferSection = ({ routeResult }: { routeResult: RouteResult }) => {
-  const transfers = routeResult?.transfers ?? [];
-  if (!transfers.length) return null;
-
-  const nearestByPos = (
-    pos: [number, number]
-  ): { id: string; name?: string; position: [number, number] } | undefined => {
-    const stations = routeResult.routeStations ?? [];
-    let best: typeof stations[number] | undefined;
-    let min = Infinity;
-    const toRad = (d: number) => (d * Math.PI) / 180;
-    const hav = (a: [number, number], b: [number, number]) => {
-      const R = 6371000;
-      const dLat = toRad(b[1] - a[1]);
-      const dLon = toRad(b[0] - a[0]);
-      const lat1 = toRad(a[1]);
-      const lat2 = toRad(b[1]);
-      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-      return 2 * R * Math.asin(Math.sqrt(h));
-    };
-    for (const s of stations) {
-      const d = hav(s.position, pos);
-      if (d < min) { min = d; best = s; }
-    }
-    return best;
-  };
-
-  const items = transfers.map((t) => {
-    const exact = (routeResult.routeStations ?? []).find((s) => s.id === t.id);
-    const resolved = exact ?? nearestByPos(t.position);
-    return { id: resolved?.id ?? t.id, name: resolved?.name ?? '乗換駅', position: resolved?.position ?? t.position };
-  });
-
-  return (
-    <div className="rounded border bg-white p-2">
-      <div className="text-xs font-semibold mb-2">乗り換え</div>
-      <div className="space-y-2">
-        {items.map((s) => (
-          <div key={s.id} className="flex items-start gap-3">
-            <div className="flex flex-col items-center">
-              <FaCircle className="text-amber-600 w-3 h-3" />
-            </div>
-            <div className="flex-1">
-              <div className="font-medium text-sm">
-                <span className="mr-2 inline-block px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700">乗換</span>
-                {s.name}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
 
 type Props = {
   mode: SelectionMode;
@@ -410,7 +491,6 @@ export default function Sidebar({
               </div>
             </div>
           )}
-          <TransferSection routeResult={routeResult} />
           <RouteTimeline selection={selection} routeResult={routeResult} />
           <div className="pt-2 space-y-2">
             <Button onClick={handleEvaluate} disabled={evaluating} className="w-full">
