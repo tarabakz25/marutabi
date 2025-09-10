@@ -11,6 +11,7 @@ export type DeckMapProps = {
   selected?: SelectedStations;
   routeGeojson?: any;
   routeOperators?: string[];
+  routeStations?: { id: string; name?: string; position: [number, number] }[];
   flyTo?: [number, number] | null;
   /** マップの初期ロード完了時に呼び出される */
   onLoadComplete?: () => void;

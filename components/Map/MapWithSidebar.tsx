@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Map } from "@/components/Map";
 import type { SelectedStations, StationSelection, SelectionMode } from "./types";
@@ -8,6 +9,7 @@ import type { RouteResult } from "@/lib/route";
 type StationSearchResult = { id: string; name: string; position: [number, number] };
 
 export default function MapWithSidebar() {
+  const router = useRouter();
   const [mode, setMode] = useState<SelectionMode>("origin");
   const [selection, setSelection] = useState<SelectedStations>({
     origin: undefined,
@@ -107,6 +109,30 @@ export default function MapWithSidebar() {
     handleStationClick(station);
   };
 
+  // キャンバスのスクショ取得（deck.gl ラッパのDOMを対象に）
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const takeScreenshot = (): string | null => {
+    try {
+      const el = containerRef.current?.querySelector('canvas');
+      if (!el) return null;
+      const dataUrl = (el as HTMLCanvasElement).toDataURL('image/png');
+      return dataUrl;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleEvaluateNavigate = (route: RouteResult) => {
+    try {
+      const img = takeScreenshot();
+      sessionStorage.setItem('route_result', JSON.stringify(route));
+      if (img) sessionStorage.setItem('route_image', img);
+      router.push('/evaluate');
+    } catch {
+      router.push('/evaluate');
+    }
+  };
+
   return (
     <div className="w-full h-[100dvh] flex">
       <Sidebar
@@ -118,9 +144,10 @@ export default function MapWithSidebar() {
         onSearch={handleSearch}
         routeResult={routeResult}
         onStationSelected={handleStationSelectedFromSearch}
+        onEvaluateNavigate={handleEvaluateNavigate}
       />
-      <div className="flex-1 relative">
-        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} />
+      <div className="flex-1 relative" ref={containerRef}>
+        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} routeStations={routeResult?.routeStations} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} />
         {(!mapLoaded) && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-20">
             <div className="animate-pulse text-sm">地図を読み込み中...</div>

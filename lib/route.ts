@@ -54,6 +54,20 @@ const adjacency = new Map<string, Edge[]>();
 const nodeCoords = new Map<string, Position>();
 const stationNode = new Map<string, string>();
 const nodeStations = new Map<string, string[]>();
+const stationInfo = new Map<string, { id: string; name: string | undefined; position: [number, number] }>();
+// Spatial grid index for nearest-node lookup
+const GRID_CELL_SIZE_DEG = 0.01; // ~1.1km @ mid-lat
+const gridIndex = new Map<string, string[]>(); // key -> array of nodeIds
+
+function cellIndex(v: number): number { return Math.floor(v / GRID_CELL_SIZE_DEG); }
+function cellKey(ix: number, iy: number): string { return `${ix},${iy}`; }
+function addToGridIndex(id: string, pos: Position) {
+  const ix = cellIndex(pos[0]);
+  const iy = cellIndex(pos[1]);
+  const key = cellKey(ix, iy);
+  if (!gridIndex.has(key)) gridIndex.set(key, []);
+  gridIndex.get(key)!.push(id);
+}
 let initialized = false;
 
 function nodeId(pos: Position): string {
@@ -83,10 +97,16 @@ async function initGraph() {
     adjacency.clear();
     nodeCoords.clear();
     stationNode.clear();
+    nodeStations.clear();
+    stationInfo.clear();
+    gridIndex.clear();
     // shallow copy
     for (const [k, v] of cache.adjacency) adjacency.set(k, v);
     for (const [k, v] of cache.nodeCoords) nodeCoords.set(k, v);
     for (const [k, v] of cache.stationNode) stationNode.set(k, v);
+    for (const [k, v] of cache.nodeStations ?? []) nodeStations.set(k, v);
+    for (const [k, v] of cache.stationInfo ?? []) stationInfo.set(k, v);
+    for (const [k, v] of cache.gridIndex ?? []) gridIndex.set(k, v);
     initialized = true;
     return;
   }
@@ -105,6 +125,8 @@ async function initGraph() {
       const bId = nodeId(b);
       nodeCoords.set(aId, a);
       nodeCoords.set(bId, b);
+      addToGridIndex(aId, a);
+      addToGridIndex(bId, b);
       const dist = haversine(a, b);
       const props = feature.properties as any;
       const operator = props?.N02_004 as string | undefined ?? 'Unknown';
@@ -139,60 +161,120 @@ async function initGraph() {
     stationNode.set(id, nearest);
     if (!nodeStations.has(nearest)) nodeStations.set(nearest, []);
     nodeStations.get(nearest)!.push(id);
+    const name = (props['N02_005'] as string | undefined) ?? undefined;
+    stationInfo.set(id, { id, name, position: coord as [number, number] });
   }
 
   // save to global cache
-  g.__railGraph = { adjacency, nodeCoords, stationNode };
+  g.__railGraph = { adjacency, nodeCoords, stationNode, nodeStations, stationInfo, gridIndex };
 }
 
 function findNearestNode(target: Position): string {
-  let result = '';
-  let min = Infinity;
-  for (const [id, pos] of nodeCoords) {
-    const d = haversine(target, pos);
-    if (d < min) {
-      min = d;
-      result = id;
+  // Search grid cells outward until we find candidates
+  const ix0 = cellIndex(target[0]);
+  const iy0 = cellIndex(target[1]);
+  const MAX_RADIUS = 5; // expands up to ~50km worst-case
+  let bestId = '';
+  let bestD = Infinity;
+  const visitCell = (ix: number, iy: number) => {
+    const arr = gridIndex.get(cellKey(ix, iy));
+    if (!arr) return;
+    for (const id of arr) {
+      const pos = nodeCoords.get(id)!;
+      const d = haversine(target, pos);
+      if (d < bestD) { bestD = d; bestId = id; }
+    }
+  };
+  for (let r = 0; r <= MAX_RADIUS; r++) {
+    if (r === 0) {
+      visitCell(ix0, iy0);
+    } else {
+      // visit square ring at radius r
+      for (let dx = -r; dx <= r; dx++) {
+        visitCell(ix0 + dx, iy0 - r);
+        visitCell(ix0 + dx, iy0 + r);
+      }
+      for (let dy = -r + 1; dy <= r - 1; dy++) {
+        visitCell(ix0 - r, iy0 + dy);
+        visitCell(ix0 + r, iy0 + dy);
+      }
+    }
+    if (bestId) break;
+  }
+  // Fallback: full scan (should be rare)
+  if (!bestId) {
+    for (const [id, pos] of nodeCoords) {
+      const d = haversine(target, pos);
+      if (d < bestD) { bestD = d; bestId = id; }
     }
   }
-  return result;
+  return bestId;
 }
 
 type CostFn = (dist: number) => number;
 
-function dijkstra(start: string, goal: string, costFn: CostFn, allowOperator: (op: string) => boolean): string[] {
-  const dist = new Map<string, number>();
-  const prev = new Map<string, string | null>();
-  const pq = new LocalMinHeap<[string, number]>((a, b) => a[1] - b[1]);
-  const push = (id: string, d: number) => {
-    pq.push([id, d]);
-  };
-  const pop = () => pq.pop() as [string, number];
-  dist.set(start, 0);
-  prev.set(start, null);
-  push(start, 0);
-  while (pq.size()) {
-    const [node, d] = pop();
-    if (node === goal) break;
-    const edges = adjacency.get(node) ?? [];
+// A* with transfer penalty (by operator/line change)
+function aStar(
+  start: string,
+  goal: string,
+  costFn: CostFn,
+  allowOperator: (op: string) => boolean,
+  options?: { transferPenalty?: number; lineChangePenalty?: number }
+): string[] {
+  const transferPenalty = options?.transferPenalty ?? 300; // meters equivalent
+  const lineChangePenalty = options?.lineChangePenalty ?? 200; // meters equivalent
+
+  type State = { id: string; g: number; f: number; prev: string | null; prevOp?: string; prevLine?: string };
+  const open = new LocalMinHeap<State>((a, b) => a.f - b.f);
+  const bestG = new Map<string, number>();
+  const parent = new Map<string, string | null>();
+
+  const goalPos = nodeCoords.get(goal)!;
+  const h = (id: string) => haversine(nodeCoords.get(id)!, goalPos);
+
+  open.push({ id: start, g: 0, f: h(start), prev: null });
+  bestG.set(start, 0);
+  parent.set(start, null);
+
+  // Track previous edge attributes per node for penalty; store separately
+  const prevEdgeAttr = new Map<string, { op?: string; line?: string }>();
+
+  while (open.size()) {
+    const cur = open.pop()!;
+    if (cur.id === goal) {
+      // reconstruct
+      const path: string[] = [];
+      let p: string | null = cur.id;
+      parent.set(cur.id, cur.prev);
+      while (p) {
+        path.unshift(p);
+        p = parent.get(p) ?? null;
+      }
+      return path;
+    }
+    if ((bestG.get(cur.id) ?? Infinity) < cur.g) continue;
+
+    const edges = adjacency.get(cur.id) ?? [];
     for (const e of edges) {
       if (!allowOperator(e.operator)) continue;
-      const nd = d + costFn(e.dist);
-      if (nd < (dist.get(e.to) ?? Infinity)) {
-        dist.set(e.to, nd);
-        prev.set(e.to, node);
-        push(e.to, nd);
+      let stepCost = costFn(e.dist);
+      // penalties
+      const attr = prevEdgeAttr.get(cur.id);
+      if (attr) {
+        if (attr.op && attr.op !== e.operator) stepCost += transferPenalty;
+        if (attr.line && attr.line !== (e.line ?? '')) stepCost += lineChangePenalty;
+      }
+      const tentativeG = cur.g + stepCost;
+      if (tentativeG < (bestG.get(e.to) ?? Infinity)) {
+        bestG.set(e.to, tentativeG);
+        parent.set(e.to, cur.id);
+        prevEdgeAttr.set(e.to, { op: e.operator, line: e.line });
+        const fScore = tentativeG + h(e.to);
+        open.push({ id: e.to, g: tentativeG, f: fScore, prev: cur.id, prevOp: e.operator, prevLine: e.line });
       }
     }
   }
-  const path: string[] = [];
-  if (!prev.has(goal)) return path;
-  let cur: string | null = goal;
-  while (cur) {
-    path.unshift(cur);
-    cur = prev.get(cur) ?? null;
-  }
-  return path;
+  return [];
 }
 
 export type FindRouteOptions = {
@@ -214,6 +296,7 @@ export type RouteResult = {
     passes: string[];
   };
   transfers: TransferPoint[];
+  routeStations: { id: string; name?: string; position: [number, number] }[];
 };
 
 export async function findRoute({
@@ -230,6 +313,8 @@ export async function findRoute({
   let timeTotal = 0;
   let distanceTotal = 0;
   const transferSet = new Map<string, TransferPoint>();
+  // 全区間にわたる経路上駅ID集合
+  const routeStationIds = new Set<string>();
 
   for (let i = 0; i < points.length - 1; i++) {
     const startNode = stationNode.get(points[i]);
@@ -247,7 +332,7 @@ export async function findRoute({
     // オペレータ許可関数
     const allowOp = (op: string) => true; // 現状すべて許可（後でパス対応）
 
-    const path = dijkstra(startNode, endNode, costFn, allowOp);
+    const path = aStar(startNode, endNode, costFn, allowOp, { transferPenalty: 500, lineChangePenalty: 200 });
     // 経路の実距離を算出
     const coords = path.map((id) => nodeCoords.get(id)!) as Position[];
     // 区間内で利用する事業者を抽出
@@ -257,15 +342,15 @@ export async function findRoute({
       const edge = edges.find((e) => e.to === path[j + 1]);
       if (edge) segOperators.add(edge.operator);
 
-      // detect transfer when operator changes between consecutive edges
+      // detect transfer when operator or line changes between consecutive edges
       if (j < path.length - 2) {
         const edgesNext = adjacency.get(path[j + 1]) ?? [];
         const edgeNext = edgesNext.find((e) => e.to === path[j + 2]);
-        if (edge && edgeNext && edge.operator !== edgeNext.operator) {
+        const changed = edge && edgeNext && (edge.operator !== edgeNext.operator || (edge.line ?? '') !== (edgeNext.line ?? ''));
+        if (changed) {
           const nodeIdMid = path[j + 1];
           const posMid = nodeCoords.get(nodeIdMid);
           if (posMid) {
-            // pick first station id if exists else use nodeId as id
             const stationIds = nodeStations.get(nodeIdMid) ?? [];
             const tid = stationIds[0] ?? nodeIdMid;
             if (!transferSet.has(tid)) {
@@ -292,29 +377,80 @@ export async function findRoute({
     const timeSeg = timeFromDistance(segDist);
     fareTotal += fareSeg;
     timeTotal += timeSeg;
-    features.push({
-      type: 'Feature',
-      properties: {
-        from: points[i],
-        to: points[i + 1],
-        seq: i,
-        fare: fareSeg,
-        time: timeSeg,
-        distance: segDist,
-        stationCount: stationCountSeg,
-        operators: operatorsArr,
-      },
-      geometry: { type: 'LineString', coordinates: coords },
-    });
+    // Build contiguous segments by line name to enable per-line coloring
+    let segStartIdx = 0;
+    const currentLine = (idx: number) => {
+      if (idx >= path.length - 1) return undefined;
+      const edges = adjacency.get(path[idx]) ?? [];
+      return edges.find((e) => e.to === path[idx + 1])?.line ?? 'UnknownLine';
+    };
+    for (let j = 0; j < path.length - 1; j++) {
+      const lineNameHere = currentLine(j);
+      const lineNameNext = currentLine(j + 1);
+      const isBreak = lineNameHere !== lineNameNext;
+      if (isBreak) {
+        const coordsSlice = path.slice(segStartIdx, j + 2).map((nid) => nodeCoords.get(nid)!) as Position[];
+        const partDist = coordsSlice.reduce((acc, cur, idx) => idx === 0 ? 0 : acc + haversine(coordsSlice[idx - 1], cur), 0);
+        features.push({
+          type: 'Feature',
+          properties: {
+            from: points[i],
+            to: points[i + 1],
+            seq: i,
+            fare: fareFromDistance(partDist),
+            time: timeFromDistance(partDist),
+            distance: partDist,
+            stationCount: stationCountSeg, // rough per segment
+            operators: operatorsArr,
+            lineName: lineNameHere,
+          },
+          geometry: { type: 'LineString', coordinates: coordsSlice },
+        });
+        segStartIdx = j + 1;
+      }
+    }
     // 全体 operators 集約
     for (const op of operatorsArr) overallOperators.add(op);
+
+    // collect stations along this path and add to global set
+    for (const nid of path) {
+      const sids = nodeStations.get(nid) ?? [];
+      for (const sid of sids) routeStationIds.add(sid);
+    }
+    // Always include endpoints for this leg
+    routeStationIds.add(points[i]);
+    routeStationIds.add(points[i + 1]);
   }
   // ---- パス候補 ----
   const passes = await suggestPasses(Array.from(overallOperators));
+  // Build routeStations from transfers + endpoints + dedup across features path nodes
+  const routeStationsSet = new Map<string, { id: string; name?: string; position: [number, number] }>();
+  // endpoints from arguments
+  for (const sid of points) {
+    const info = stationInfo.get(sid);
+    if (info) routeStationsSet.set(sid, { id: sid, name: info.name, position: info.position });
+  }
+  // transfers
+  for (const t of transferSet.values()) {
+    const candidateIds = nodeStations.get(t.id) ?? [];
+    const sid = candidateIds[0] ?? t.id;
+    const info = stationInfo.get(sid);
+    const pos = info?.position ?? t.position;
+    const name = info?.name;
+    routeStationsSet.set(sid, { id: sid, name, position: pos });
+  }
+  // all pass-through stations (includes endpoints; Map ensures dedup)
+  for (const sid of routeStationIds) {
+    const info = stationInfo.get(sid);
+    if (info) {
+      routeStationsSet.set(sid, { id: sid, name: info.name, position: info.position });
+    }
+  }
   return {
     geojson: { type: 'FeatureCollection', features },
     summary: { fareTotal, timeTotal, distanceTotal, operators: Array.from(overallOperators), passes },
     transfers: Array.from(transferSet.values()),
+    routeStations: Array.from(routeStationsSet.values()),
   };
 }
 
