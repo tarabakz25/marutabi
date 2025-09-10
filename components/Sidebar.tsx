@@ -319,15 +319,15 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="h-full w-80 border-r bg-white/70 backdrop-blur flex flex-col gap-4">
-      <div className="space-y-2 px-4 pt-4">
+    <aside className="h-full w-80 border-r bg-white/70 backdrop-blur p-4 flex flex-col gap-4">
+      <div className="space-y-2">
         <h2 className="text-base font-semibold">経路検索</h2>
         <p className="text-xs text-muted-foreground">駅名を入力するか地図上の駅をクリック</p>
       </div>
 
       {/* 駅名検索 */}
       {activeInput !== null && (
-        <div className="space-y-2 border-2 border-primary rounded p-3 bg-primary/5 mx-4">
+        <div className="space-y-2 border-2 border-primary rounded p-3 bg-primary/5">
           <div className="text-sm font-medium text-primary">
             {activeInput === 'origin' && '出発駅を選択'}
             {activeInput === 'destination' && '到着駅を選択'}
@@ -365,7 +365,7 @@ export default function Sidebar({
       )}
 
       {/* 駅選択リスト */}
-      <div className="space-y-3 px-4">
+      <div className="space-y-3">
         {/* 出発駅 */}
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-500"></div>
@@ -482,7 +482,7 @@ export default function Sidebar({
 
       {/* 検索結果 / 評価ビュー */}
       {routeResult && !showEvalView && (
-        <div className="space-y-2 mt-4 overflow-y-auto flex-1 px-4">
+        <div className="space-y-2 mt-4 overflow-y-auto flex-1 pr-1">
           <h3 className="text-base font-semibold">検索結果</h3>
           {routeResult.summary?.passes && routeResult.summary.passes.length > 0 && (
             <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs">
@@ -505,7 +505,7 @@ export default function Sidebar({
       )}
 
       {routeResult && showEvalView && (
-        <div className="space-y-2 mt-4 overflow-y-auto flex-1 px-4">
+        <div className="space-y-2 mt-4 overflow-y-auto flex-1 pr-1">
           <h3 className="text-base font-semibold">評価結果</h3>
           {evalResult?.composite && (
             <div className="rounded border bg-white p-3 text-sm space-y-2">
@@ -539,7 +539,7 @@ export default function Sidebar({
         </div>
       )}
 
-      <div className="mt-auto flex gap-2 px-4 pb-4">
+      <div className="mt-auto flex gap-2">
         {!showEvalView ? (
           <>
             <Button onClick={onSearch} className="w-full">検索する</Button>

@@ -134,7 +134,7 @@ export default function MapWithSidebar() {
   };
 
   return (
-    <div className="w-full h-[100dvh] flex overflow-hidden">
+    <div className="w-full h-[100dvh] flex relative">
       <Sidebar
         mode={mode}
         selection={selection}
@@ -148,18 +148,30 @@ export default function MapWithSidebar() {
       />
       <div className="flex-1 relative" ref={containerRef}>
         <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} routeStations={routeResult?.routeStations} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} />
-        {(!mapLoaded) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-20">
-            <div className="animate-pulse text-sm">地図を読み込み中...</div>
-          </div>
-        )}
-        {loading && (
-          <div className="absolute top-2 right-2 bg-white px-3 py-1 text-xs shadow">計算中...</div>
-        )}
         {error && (
           <div className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 text-xs shadow">{error}</div>
         )}
       </div>
+      
+      {/* 全画面ローディング表示 */}
+      {(!mapLoaded) && (
+        <div className="fixed inset-0 flex items-center justify-center bg-white z-50">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-lg font-medium">地図を読み込み中...</div>
+          </div>
+        </div>
+      )}
+      
+      {/* 全画面計算中表示 */}
+      {loading && (
+        <div className="fixed inset-0 flex items-center justify-center bg-white/80 z-50">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-lg font-medium">ルートを計算中...</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

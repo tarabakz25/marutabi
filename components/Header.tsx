@@ -20,8 +20,8 @@ export default async function Header() {
   const fallbackInitial = userName?.[0]?.toUpperCase() ?? "U";
 
   return (
-    <div className="w-full h-24 sticky top-0 z-50">
-      <div className="absolute top-4 right-4">
+    <div className="w-full h-20 sticky top-0 z-50">
+      <div className="absolute top-4 right-6">
         {!session?.user && (
           <Link href="/login" className="inline-flex items-center px-3 py-1.5 rounded-lg border hover:bg-slate-50">Login</Link>
         )}
