@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
+import HeaderActions from "@/components/HeaderActions";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -20,15 +21,19 @@ export default async function Header() {
   const fallbackInitial = userName?.[0]?.toUpperCase() ?? "U";
 
   return (
-    <div className="w-full h-20 sticky top-0 z-50">
-      <div className="absolute top-4 right-6">
+    <div className="w-full h-20 sticky top-0 z-50 bg-white border-b flex items-center justify-between px-6">
+      <div className="flex-1">
+        <h1 className="text-2xl font-bold">まるたび</h1>
+      </div>
+      <div className="flex items-center gap-3">
+        <HeaderActions />
         {!session?.user && (
           <Link href="/login" className="inline-flex items-center px-3 py-1.5 rounded-lg border hover:bg-slate-50">Login</Link>
         )}
         {session?.user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Avatar className="size-12">
+              <Avatar className="size-10">
                 {userImage ? (
                   <AvatarImage src={userImage} alt={userName ?? "user"} />
                 ) : (
@@ -36,7 +41,11 @@ export default async function Header() {
                 )}
               </Avatar>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent
+              side="bottom"
+              align="start"
+              alignOffset={-100}
+            >
               <DropdownMenuLabel>{userName}</DropdownMenuLabel>
               <DropdownMenuGroup>
                 <DropdownMenuItem>Profile</DropdownMenuItem>

@@ -109,6 +109,24 @@ export default function MapWithSidebar() {
     handleStationClick(station);
   };
 
+  // Listen to global flyTo events from header search
+  useEffect(() => {
+    const onFlyTo = (e: Event) => {
+      const ce = e as CustomEvent<{ position: [number, number]; station?: StationSearchResult }>;
+      const pos = ce.detail?.position;
+      if (!pos) return;
+      setFlyTo(pos);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('map:flyTo', onFlyTo as EventListener);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('map:flyTo', onFlyTo as EventListener);
+      }
+    };
+  }, []);
+
   // キャンバスのスクショ取得（deck.gl ラッパのDOMを対象に）
   const containerRef = useRef<HTMLDivElement | null>(null);
   const takeScreenshot = (): string | null => {
