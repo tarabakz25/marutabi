@@ -18,7 +18,10 @@ export default function Login() {
           
           <div className="space-y-4">
             <Button 
-              onClick={() => signIn("github")} 
+              onClick={() => {
+                console.log('GitHub login button clicked');
+                signIn("github", { callbackUrl: '/dashboard' });
+              }} 
               className="w-full h-12 text-base font-medium"
               variant="outline"
             >

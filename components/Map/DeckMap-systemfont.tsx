@@ -58,15 +58,15 @@ export default function DeckMapSystemFont() {
           fetch('/api/map/railroads', {
             method: 'GET',
             headers: {
-              'Accept': 'application/geo+json,application/json',
-              'Cache-Control': 'no-cache'
+              'Accept': 'application/geo+json,application/json'
+              // キャッシュを有効化するためにCache-Controlヘッダーを削除
             }
           }),
           fetch('/api/map/stations', {
             method: 'GET',
             headers: {
-              'Accept': 'application/geo+json,application/json',
-              'Cache-Control': 'no-cache'
+              'Accept': 'application/geo+json,application/json'
+              // キャッシュを有効化するためにCache-Controlヘッダーを削除
             }
           })
         ]);

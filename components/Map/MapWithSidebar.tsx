@@ -134,7 +134,7 @@ export default function MapWithSidebar() {
   };
 
   return (
-    <div className="w-full h-[100dvh] flex">
+    <div className="w-full h-[100dvh] flex overflow-hidden">
       <Sidebar
         mode={mode}
         selection={selection}
