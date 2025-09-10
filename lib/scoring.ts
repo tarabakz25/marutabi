@@ -91,6 +91,7 @@ export type LLMRouteEvaluation = {
   reasons: string[];
   risks?: string[];
   comment?: string; // overall comment in locale language
+  errorMessage?: string; // present when LLM call failed/partial
 };
 
 export type LLMRouteEvalInput = RouteEvaluationInput & {

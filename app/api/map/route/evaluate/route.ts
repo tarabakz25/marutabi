@@ -44,12 +44,25 @@ export async function POST(req: NextRequest) {
     const composite = computeCompositeScore(evalInput);
 
     let llm: any = null;
-    if (process.env.OPENAI_API_KEY) {
-      try {
+    try {
+      if (process.env.OPENAI_API_KEY) {
         llm = await evaluateRouteWithLLM({ ...evalInput, locale: 'ja', style: 'concise' });
-      } catch (e) {
-        llm = { error: 'LLM evaluation failed' };
+        (llm as any).source = 'openai';
+      } else {
+        // Fallback minimal comment without LLM
+        llm = {
+          score: composite.score,
+          reasons: [
+            `時間(${Math.round(evalInput.totalTimeMinutes)}分)`,
+            `運賃(${Math.round(evalInput.totalFare)}円)`,
+            `乗換(${evalInput.transferCount}回)`
+          ],
+          comment: `LLM未設定のため簡易評価。総合スコアは${composite.score}です。`,
+          source: 'fallback'
+        };
       }
+    } catch (e) {
+      llm = { score: composite.score, reasons: ['評価でエラーが発生しました'], comment: `総合スコアは${composite.score}です。`, source: 'error', errorMessage: e instanceof Error ? e.message : String(e) };
     }
 
     return NextResponse.json({ composite, llm }, { headers: { 'content-type': 'application/json; charset=utf-8' } });

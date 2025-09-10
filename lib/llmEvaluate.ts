@@ -28,22 +28,51 @@ export async function evaluateRouteWithLLM(input: LLMRouteEvalInput): Promise<LL
     throw new Error('OPENAI_API_KEY is not set');
   }
   const prompt = buildPrompt(input);
-  const res = await openai.responses.create({
-    model: 'gpt-5-mini',
-    input: [
-      { role: 'system', content: 'Return only valid JSON. No extra text.' },
-      { role: 'user', content: prompt },
-    ] as any,
-    temperature: 0.2,
-    response_format: { type: 'json_object' } as any,
-  });
-  const content = (res as any).output_text ?? '{}';
+  let content = '{}';
+  const MAX_ATTEMPTS = 2;
+  const TIMEOUT_MS = 45000;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const res = await openai.chat.completions.create(
+        {
+          model: 'gpt-5-mini',
+          messages: [
+            { role: 'system', content: 'Return only valid JSON. No extra text.' },
+            { role: 'user', content: prompt },
+          ],
+          response_format: { type: 'json_object' } as any,
+        } as any,
+        { signal: controller.signal as any }
+      );
+      content = res.choices?.[0]?.message?.content ?? '{}';
+      clearTimeout(timeout);
+      break;
+    } catch (e) {
+      clearTimeout(timeout);
+      const message = e instanceof Error ? e.message : String(e);
+      const isAbort = /aborted|abort/i.test(message);
+      if (attempt < MAX_ATTEMPTS && isAbort) {
+        // retry once on timeout/abort
+        continue;
+      }
+      return { score: 0, reasons: ['LLM呼び出しに失敗しました'], risks: [], comment: '解析に失敗しました。', errorMessage: message };
+    }
+  }
   try {
     const parsed = JSON.parse(content);
     const score = Math.max(0, Math.min(100, Number(parsed.score ?? 0)));
     const reasons: string[] = Array.isArray(parsed.reasons) ? parsed.reasons.slice(0, 5) : [];
     const risks: string[] | undefined = Array.isArray(parsed.risks) ? parsed.risks.slice(0, 5) : undefined;
-    const comment: string | undefined = typeof parsed.comment === 'string' ? parsed.comment : undefined;
+    let comment: string | undefined = typeof parsed.comment === 'string' ? parsed.comment : undefined;
+    if (!comment || comment.trim().length < 3) {
+      // Fallback short comment from reasons
+      const top = reasons.slice(0, 2).join('、');
+      comment = top
+        ? `総合スコアは${score}。主な評価ポイントは「${top}」。`
+        : `総合スコアは${score}です。`;
+    }
     return { score, reasons, risks, comment };
   } catch (e) {
     return { score: 0, reasons: ['LLM応答の解析に失敗しました'], risks: [], comment: '解析に失敗しました。' };
