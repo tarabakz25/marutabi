@@ -1,9 +1,12 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { authOptions } from "@/lib/authOptions";
-import Header from "@/components/Header";
-import MapWithSidebar from "@/components/Map/MapWithSidebar";
+import DashboardSidebar from "@/components/DashboardSidebar";
+import LevelCard from "@/components/Dashboard/LevelCard";
+import AchievementsCard from "@/components/Dashboard/AchievementsCard";
+import RecentProgressCard from "@/components/Dashboard/RecentProgressCard";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { User, Map, FileText, Settings } from "lucide-react";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -11,14 +14,47 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  const userName = (session?.user as any)?.name as string | undefined;
+
+  const sidebarItems = [
+    {
+      label: "Profile",
+      href: "/dashboard/profile",
+      icon: User,
+    },
+    {
+      label: "Trips",
+      href: "/trips/new",
+      icon: Map,
+    },
+    {
+      label: "Blogs",
+      href: "/dashboard/blogs",
+      icon: FileText,
+    },
+    {
+      label: "Settings",
+      href: "/dashboard/settings",
+      icon: Settings,
+    },
+  ]
+
   return (
-    <div className="flex flex-col h-screen">
-      <Header />
-      <div className="flex-1">
-        <MapWithSidebar />
-      </div>
-    </div>
-  );
+    <SidebarProvider>
+      <DashboardSidebar 
+        items={sidebarItems}
+      />
+      <SidebarInset>
+        <div className="p-12">
+          <div className="flex flex-col gap-4">
+            <h1 className="text-3xl font-bold mb-6"><span className="font-medium">{userName}</span> ようこそ！</h1>
+            <LevelCard />
+            <RecentProgressCard />
+          </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  )
 }
 
 

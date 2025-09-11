@@ -60,76 +60,6 @@ const gridSample = (points: { position: [number, number] }[], cellDeg: number) =
   return out;
 };
 
-// --- Operator matching utilities (module-scope to avoid TDZ) ---
-function isShinkansen(line?: string): boolean {
-  return (line ?? '').includes('新幹線');
-}
-
-function isJRLike(op: string): boolean {
-  return op.includes('ＪＲ') || op.includes('JR');
-}
-
-const OP_MAP: Record<string, (ja: string) => boolean> = {
-  'JR': (s) => isJRLike(s),
-  'JR Hokkaido': (s) => s.includes('ＪＲ北海道') || s.includes('JR北海道'),
-  'JR East': (s) => s.includes('ＪＲ東日本') || s.includes('JR東日本'),
-  'JR Central': (s) => s.includes('ＪＲ東海') || s.includes('JR東海'),
-  'JR West': (s) => s.includes('ＪＲ西日本') || s.includes('JR西日本'),
-  'JR Shikoku': (s) => s.includes('ＪＲ四国') || s.includes('JR四国'),
-  'JR Kyushu': (s) => s.includes('ＪＲ九州') || s.includes('JR九州'),
-  'Aoimori Railway': (s) => s.includes('青い森鉄道'),
-  'IGR Iwate Galaxy Railway': (s) => s.includes('IGR') || s.includes('いわて銀河鉄道') || s.includes('ＩＧＲ'),
-  'Hokuetsu Express': (s) => s.includes('北越急行'),
-  'Tokyo Monorail': (s) => s.includes('東京モノレール'),
-  'TWR Rinkai Line': (s) => s.includes('東京臨海高速鉄道') || s.includes('りんかい線'),
-  'Meitetsu': (s) => s.includes('名古屋鉄道'),
-  'Kintetsu': (s) => s.includes('近畿日本鉄道'),
-  'Nankai': (s) => s.includes('南海電気鉄道') || s.includes('南海'),
-  'Shizutetsu': (s) => s.includes('静岡鉄道'),
-  'Enshu Railway': (s) => s.includes('遠州鉄道'),
-  'Aichi Loop Railway': (s) => s.includes('愛知環状鉄道'),
-  'Yoro Railway': (s) => s.includes('養老鉄道'),
-  'Izu Kyuko': (s) => s.includes('伊豆急行'),
-  'Izuhakone Railway': (s) => s.includes('伊豆箱根鉄道'),
-  'Sangi Railway': (s) => s.includes('三岐鉄道'),
-  'Nagaragawa Railway': (s) => s.includes('長良川鉄道'),
-  'Akechi Railway': (s) => s.includes('明知鉄道'),
-  'Tenryu Hamanako Railroad': (s) => s.includes('天竜浜名湖鉄道'),
-  'Ise Railway': (s) => s.includes('伊勢鉄道'),
-  'Yokkaichi Asunarou Railway': (s) => s.includes('四日市あすなろう鉄道'),
-  'Toyohashi Railroad': (s) => s.includes('豊橋鉄道'),
-  'Minatomirai Line': (s) => s.includes('横浜高速鉄道') || s.includes('みなとみらい'),
-};
-
-function matchOperator(ruleOp?: string, opJa?: string): boolean {
-  if (!opJa) return false;
-  if (!ruleOp) return true;
-  const fn = OP_MAP[ruleOp];
-  if (fn) return fn(opJa);
-  return opJa.toLowerCase().includes(ruleOp.toLowerCase());
-}
-
-function buildAllowOperatorPredicate(rulesList: any[]): (op: string, line: string) => boolean {
-  const predicates = rulesList.map((rules) => {
-    const includeArr: any[] = Array.isArray(rules?.include) ? rules.include : [];
-    const excludeArr: any[] = Array.isArray(rules?.exclude) ? rules.exclude : [];
-    const includesShinkansen = includeArr.some((x) => (x?.service ?? []).includes?.('Shinkansen'));
-    const excludeShinkansen = excludeArr.some((x) => (x?.service ?? []).includes?.('Shinkansen'));
-    const includeOps = includeArr.map((x) => x?.operator).filter(Boolean) as string[];
-    return (op: string, line: string) => {
-      if (isShinkansen(line)) {
-        if (excludeShinkansen) return false;
-        if (!includesShinkansen) return false;
-      }
-      if (includeOps.length === 0) return true; // ルール未指定なら可視
-      if (includeOps.includes('JR') && isJRLike(op)) return true;
-      for (const rop of includeOps) if (matchOperator(rop, op)) return true;
-      return false;
-    };
-  });
-  return (op: string, line: string) => predicates.some((p) => p(op, line));
-}
-
 type Props = {
   onStationClick?: (station: StationSelection) => void;
   selected?: SelectedStations;
@@ -138,10 +68,9 @@ type Props = {
   routeStations?: { id: string; name?: string; position: [number, number] }[];
   flyTo?: [number, number] | null;
   onLoadComplete?: () => void;
-  passIds?: string[];
 };
 
-export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, routeStations, flyTo, onLoadComplete, passIds }: Props) {
+export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, routeStations, flyTo, onLoadComplete }: Props) {
   const [railGeojson, setRailGeojson] = useState<any | null>(null);
   const [stationGeojson, setStationGeojson] = useState<any | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -246,47 +175,15 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
     };
   }, [containerSize.width, containerSize.height]);
 
-  const [passCatalog, setPassCatalog] = useState<{ id: string; rules?: any }[] | null>(null);
-  useEffect(() => {
-    let ab = new AbortController();
-    (async () => {
-      try {
-        const res = await fetch('/api/map/passes/full', { signal: ab.signal });
-        if (!res.ok) return;
-        const data = (await res.json()) as { id: string; name: string; rules?: any }[];
-        setPassCatalog(data.map((d) => ({ id: d.id, rules: d.rules })));
-      } catch { /* ignore */ }
-    })();
-    return () => ab.abort();
-  }, []);
-
   const railDataFiltered = useMemo(() => {
     if (!railGeojson) return { type: 'FeatureCollection', features: [] };
-    // きっぷ指定があれば、きっぷのルールに基づいて事業者/新幹線可否でフィルタ
-    if (passIds && passIds.length > 0 && passCatalog) {
-      const selected = passCatalog.filter((p) => passIds.includes(p.id));
-      if (selected.length > 0) {
-        const allowEdge = buildAllowOperatorPredicate(selected.map((s) => s.rules));
-        const feats = railGeojson.features.filter((f: any) => {
-          const op = f?.properties?.N02_004 as string | undefined;
-          const line = f?.properties?.N02_003 as string | undefined;
-          return allowEdge(op ?? '', line ?? '');
-        });
-        return { ...railGeojson, features: feats };
-      }
-    }
-    // 経路に合わせた表示（従来）
-    if (routeOperators && routeOperators.length > 0) {
-      const feats = railGeojson.features.filter((f: any) => {
-        const op = f?.properties?.N02_004 as string | undefined;
-        return routeOperators.includes(op ?? '');
-      });
-      return { ...railGeojson, features: feats };
-    }
-    return railGeojson;
-  }, [railGeojson, routeOperators, passIds, passCatalog]);
-
-  // duplicate helper definitions removed; using module-scope ones above
+    if (!routeOperators || routeOperators.length === 0) return railGeojson;
+    const feats = railGeojson.features.filter((f: any) => {
+      const op = f?.properties?.N02_004 as string | undefined;
+      return routeOperators.includes(op ?? '');
+    });
+    return { ...railGeojson, features: feats };
+  }, [railGeojson, routeOperators]);
 
   type StationPoint = { position: [number, number]; name?: string; id?: string };
 

@@ -54,7 +54,6 @@ export default function MapWithSidebar() {
   const [error, setError] = useState<string | null>(null);
   const [searchToken, setSearchToken] = useState<number>(0);
   const passIdsRef = useRef<string[] | null>(null);
-  const [passIdsState, setPassIdsState] = useState<string[]>([]);
 
   const handleSearch = () => {
     // selection should contain at least origin & destination
@@ -66,9 +65,7 @@ export default function MapWithSidebar() {
     // Sidebar からの passIds 受信
     const onPassIds = (e: Event) => {
       const ce = e as CustomEvent<{ passIds: string[] }>;
-      const arr = Array.isArray(ce.detail?.passIds) ? ce.detail.passIds : [];
-      passIdsRef.current = arr;
-      setPassIdsState(arr);
+      passIdsRef.current = Array.isArray(ce.detail?.passIds) ? ce.detail.passIds : [];
     };
     if (typeof window !== 'undefined') {
       window.addEventListener('route:passIds', onPassIds as EventListener);
@@ -188,7 +185,7 @@ export default function MapWithSidebar() {
         onEvaluateNavigate={handleEvaluateNavigate}
       />
       <div className="absolute inset-0" ref={containerRef}>
-        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} routeStations={routeResult?.routeStations} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} passIds={passIdsState} />
+        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} routeStations={routeResult?.routeStations} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} />
         {error && (
           <div className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 text-xs shadow">{error}</div>
         )}

@@ -15,7 +15,6 @@ export type DeckMapProps = {
   flyTo?: [number, number] | null;
   /** マップの初期ロード完了時に呼び出される */
   onLoadComplete?: () => void;
-  passIds?: string[]; // 選択中の切符（表示フィルタ用）
 };
 
 export const Map = (props: DeckMapProps) => {
