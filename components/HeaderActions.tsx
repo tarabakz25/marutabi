@@ -34,6 +34,9 @@ export default function HeaderActions() {
     []
   );
 
+  const unreadCount = notifications.length;
+  const displayCount = unreadCount > 9 ? "9+" : String(unreadCount);
+
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
@@ -112,8 +115,16 @@ export default function HeaderActions() {
       {/* Notifications */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="notifications">
+          <Button variant="ghost" size="icon" aria-label="notifications" className="relative">
             <Bell className="size-5" />
+            {unreadCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] leading-4 text-center shadow"
+                aria-label={`未読通知 ${displayCount}`}
+              >
+                {displayCount}
+              </span>
+            )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">

@@ -163,6 +163,31 @@ async function initGraph() {
     nodeStations.get(nearest)!.push(id);
     const name = (props['N02_005'] as string | undefined) ?? undefined;
     stationInfo.set(id, { id, name, position: coord as [number, number] });
+
+    // Transferエッジの追加は後段の二次パスでまとめて行う
+  }
+
+  // 二次パス: 各駅の最近傍ノードから、他の「駅に紐づくノード」にのみ乗換エッジを張る（過剰接続抑制）
+  {
+    const NEAR_RADIUS_M = 220; // やや広げる（実駅間を確実に接続）
+    for (const [sid, info] of stationInfo) {
+      const a = stationNode.get(sid);
+      if (!a) continue;
+      const nearNodeIds = findNodesWithinRadius(info.position as Position, NEAR_RADIUS_M);
+      for (const b of nearNodeIds) {
+        if (b === a) continue;
+        if (!nodeStations.has(b)) continue; // 相手も駅に紐づくノードのみ
+        const pa = nodeCoords.get(a)!;
+        const pb = nodeCoords.get(b)!;
+        const dist = haversine(pa, pb);
+        if (!adjacency.has(a)) adjacency.set(a, []);
+        if (!adjacency.has(b)) adjacency.set(b, []);
+        const existsAB = (adjacency.get(a)!).some((e) => e.to === b && e.operator === 'Transfer');
+        const existsBA = (adjacency.get(b)!).some((e) => e.to === a && e.operator === 'Transfer');
+        if (!existsAB) adjacency.get(a)!.push({ to: b, dist: Math.max(1, dist), operator: 'Transfer', line: 'Transfer' });
+        if (!existsBA) adjacency.get(b)!.push({ to: a, dist: Math.max(1, dist), operator: 'Transfer', line: 'Transfer' });
+      }
+    }
   }
 
   // save to global cache
@@ -211,6 +236,31 @@ function findNearestNode(target: Position): string {
   return bestId;
 }
 
+// 半径内のノードID一覧を返す（簡易グリッドで範囲を絞る）
+function findNodesWithinRadius(center: Position, radiusMeters: number): string[] {
+  const degApprox = radiusMeters / 111320; // 1度 ≒ 111.32km
+  const ix0 = cellIndex(center[0]);
+  const iy0 = cellIndex(center[1]);
+  const range = Math.max(1, Math.ceil(degApprox / GRID_CELL_SIZE_DEG));
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (let dx = -range; dx <= range; dx++) {
+    for (let dy = -range; dy <= range; dy++) {
+      const arr = gridIndex.get(cellKey(ix0 + dx, iy0 + dy));
+      if (!arr) continue;
+      for (const id of arr) {
+        if (seen.has(id)) continue;
+        const pos = nodeCoords.get(id)!;
+        if (haversine(center, pos) <= radiusMeters) {
+          result.push(id);
+          seen.add(id);
+        }
+      }
+    }
+  }
+  return result;
+}
+
 type CostFn = (dist: number) => number;
 
 // A* with transfer penalty (by operator/line change)
@@ -218,7 +268,7 @@ function aStar(
   start: string,
   goal: string,
   costFn: CostFn,
-  allowOperator: (op: string) => boolean,
+  allowEdge: (e: Edge) => boolean,
   options?: { transferPenalty?: number; lineChangePenalty?: number }
 ): string[] {
   const transferPenalty = options?.transferPenalty ?? 300; // meters equivalent
@@ -256,7 +306,7 @@ function aStar(
 
     const edges = adjacency.get(cur.id) ?? [];
     for (const e of edges) {
-      if (!allowOperator(e.operator)) continue;
+      if (!allowEdge(e)) continue;
       let stepCost = costFn(e.dist);
       // penalties
       const attr = prevEdgeAttr.get(cur.id);
@@ -282,6 +332,7 @@ export type FindRouteOptions = {
   destinationId: string;
   viaIds?: string[];
   priority?: Priority;
+  passIds?: string[]; // 指定された切符でのみ到達可能な経路にフィルタ
 };
 
 export type TransferPoint = { id: string; position: [number, number] };
@@ -304,6 +355,7 @@ export async function findRoute({
   destinationId,
   viaIds = [],
   priority = 'optimal',
+  passIds = [],
 }: FindRouteOptions): Promise<RouteResult> {
   await initGraph();
   const overallOperators = new Set<string>();
@@ -329,10 +381,18 @@ export async function findRoute({
       return d; // optimal = 距離優先
     };
 
-    // オペレータ許可関数
-    const allowOp = (op: string) => true; // 現状すべて許可（後でパス対応）
+    // オペレータ・路線の許可関数（切符ルール適用）
+    const allowEdge = await buildAllowEdge(passIds);
 
-    const path = aStar(startNode, endNode, costFn, allowOp, { transferPenalty: 500, lineChangePenalty: 200 });
+    let path = aStar(startNode, endNode, costFn, allowEdge, { transferPenalty: 500, lineChangePenalty: 200 });
+    // フォールバック: 切符指定がない場合のみ緩和（新幹線許可）
+    if ((!path || path.length === 0) && passIds.length === 0) {
+      const allowAll = (_e: Edge) => true;
+      path = aStar(startNode, endNode, costFn, allowAll, { transferPenalty: 500, lineChangePenalty: 200 });
+    }
+    if (!path || path.length === 0) {
+      throw new Error(`No path found between ${points[i]} and ${points[i + 1]}`);
+    }
     // 経路の実距離を算出
     const coords = path.map((id) => nodeCoords.get(id)!) as Position[];
     // 区間内で利用する事業者を抽出
@@ -341,24 +401,6 @@ export async function findRoute({
       const edges = adjacency.get(path[j]) ?? [];
       const edge = edges.find((e) => e.to === path[j + 1]);
       if (edge) segOperators.add(edge.operator);
-
-      // detect transfer when operator or line changes between consecutive edges
-      if (j < path.length - 2) {
-        const edgesNext = adjacency.get(path[j + 1]) ?? [];
-        const edgeNext = edgesNext.find((e) => e.to === path[j + 2]);
-        const changed = edge && edgeNext && (edge.operator !== edgeNext.operator || (edge.line ?? '') !== (edgeNext.line ?? ''));
-        if (changed) {
-          const nodeIdMid = path[j + 1];
-          const posMid = nodeCoords.get(nodeIdMid);
-          if (posMid) {
-            const stationIds = nodeStations.get(nodeIdMid) ?? [];
-            const tid = stationIds[0] ?? nodeIdMid;
-            if (!transferSet.has(tid)) {
-              transferSet.set(tid, { id: tid, position: posMid as [number, number] });
-            }
-          }
-        }
-      }
     }
     const operatorsArr = Array.from(segOperators);
     const segDist = coords.reduce((acc, cur, idx) => {
@@ -367,11 +409,18 @@ export async function findRoute({
     }, 0);
     distanceTotal += segDist;
 
-    // 駅数カウント：path の各 nodeId が stationNode の値に含まれるか確認
+    // 駅ノード集合（全体で一度構築）
     const stationNodeSet = new Set<string>();
     for (const [, nid] of stationNode) stationNodeSet.add(nid);
-    let stationCountSeg = 0;
-    for (const nid of path) if (stationNodeSet.has(nid)) stationCountSeg++;
+
+    const countStationsInRange = (startIdx: number, endIdxInclusive: number) => {
+      let c = 0;
+      for (let k = startIdx; k <= endIdxInclusive; k++) {
+        const nidHere = path[k];
+        if (stationNodeSet.has(nidHere)) c++;
+      }
+      return c;
+    };
 
     const fareSeg = fareFromDistance(segDist);
     const timeSeg = timeFromDistance(segDist);
@@ -400,14 +449,85 @@ export async function findRoute({
             fare: fareFromDistance(partDist),
             time: timeFromDistance(partDist),
             distance: partDist,
-            stationCount: stationCountSeg, // rough per segment
+            stationCount: countStationsInRange(segStartIdx, j + 1),
             operators: operatorsArr,
             lineName: lineNameHere,
           },
           geometry: { type: 'LineString', coordinates: coordsSlice },
         });
+        // transfer at boundary node j+1 (line change point)
+        const boundaryNode = path[j + 1];
+        const posMid = nodeCoords.get(boundaryNode);
+        if (posMid) {
+          let sid = (nodeStations.get(boundaryNode) ?? [])[0];
+          if (!sid) {
+            const near = findNodesWithinRadius(posMid, 180);
+            for (const nid of near) {
+              const sids = nodeStations.get(nid);
+              if (sids && sids[0]) { sid = sids[0]; break; }
+            }
+          }
+          if (sid && !transferSet.has(sid)) {
+            transferSet.set(sid, { id: sid, position: (stationInfo.get(sid)?.position ?? posMid) as [number, number] });
+          }
+        }
         segStartIdx = j + 1;
       }
+    }
+
+    // --- 乗換検出（Transferエッジを除外して前後の実路線が変わったノードを抽出） ---
+    const getEdgeAttr = (u: string, v: string) => {
+      const e = (adjacency.get(u) ?? []).find((x) => x.to === v);
+      return e ? { op: e.operator, line: e.line } : undefined;
+    };
+    const isRealRail = (op?: string) => op && op !== 'Transfer';
+    const findPrevNonTransferIdx = (k: number) => {
+      for (let t = k - 1; t >= 0; t--) {
+        const attr = getEdgeAttr(path[t], path[t + 1]);
+        if (attr && isRealRail(attr.op)) return t;
+      }
+      return -1;
+    };
+    const findNextNonTransferIdx = (k: number) => {
+      for (let t = k; t < path.length - 1; t++) {
+        const attr = getEdgeAttr(path[t], path[t + 1]);
+        if (attr && isRealRail(attr.op)) return t;
+      }
+      return -1;
+    };
+
+    const orderedTransfersForThisLeg: TransferPoint[] = [];
+    const seenTransferStations = new Set<string>();
+    for (let pivot = 1; pivot < path.length - 1; pivot++) {
+      const prevIdx = findPrevNonTransferIdx(pivot);
+      const nextIdx = findNextNonTransferIdx(pivot);
+      if (prevIdx < 0 || nextIdx < 0) continue;
+      const a = getEdgeAttr(path[prevIdx], path[prevIdx + 1]);
+      const b = getEdgeAttr(path[nextIdx], path[nextIdx + 1]);
+      if (!a || !b) continue;
+      const changed = (a.op !== b.op) || ((a.line ?? '') !== (b.line ?? ''));
+      if (!changed) continue;
+      const nodeIdMid = path[pivot];
+      // 駅IDを特定（同一ノードが駅でなければ近傍から駅を探す）
+      const candStationIds = nodeStations.get(nodeIdMid) ?? [];
+      let stationId = candStationIds[0];
+      if (!stationId) {
+        const near = findNodesWithinRadius(nodeCoords.get(nodeIdMid)!, 180);
+        for (const nid of near) {
+          const sids = nodeStations.get(nid);
+          if (sids && sids[0]) { stationId = sids[0]; break; }
+        }
+      }
+      if (!stationId) continue; // 駅が見つからない乗換はスキップ（UIに"乗換駅"を出さない）
+      if (seenTransferStations.has(stationId)) continue;
+      seenTransferStations.add(stationId);
+      const info = stationInfo.get(stationId);
+      if (!info) continue;
+      orderedTransfersForThisLeg.push({ id: stationId, position: info.position });
+    }
+    // 順序を保ってセットに投入
+    for (const t of orderedTransfersForThisLeg) {
+      if (!transferSet.has(t.id)) transferSet.set(t.id, t);
     }
     // 全体 operators 集約
     for (const op of operatorsArr) overallOperators.add(op);
@@ -422,7 +542,9 @@ export async function findRoute({
     routeStationIds.add(points[i + 1]);
   }
   // ---- パス候補 ----
-  const passes = await suggestPasses(Array.from(overallOperators));
+  const passes = passIds.length > 0
+    ? await getPassNames(passIds)
+    : await suggestPasses(Array.from(overallOperators));
   // Build routeStations from transfers + endpoints + dedup across features path nodes
   const routeStationsSet = new Map<string, { id: string; name?: string; position: [number, number] }>();
   // endpoints from arguments
@@ -476,12 +598,136 @@ async function suggestPasses(operators: string[]): Promise<string[]> {
       const include = f.properties?.rules?.include as any[] | undefined;
       if (!include) continue;
       const incOps = include.map((i) => i.operator).filter(Boolean) as string[];
-      const coversAll = operators.every((op) => incOps.includes(op));
+      const coversAll = operators.every((op) => incOps.includes(op) || isOperatorCoveredByJRWildcard(op, incOps));
       if (coversAll) result.push(f.properties?.name ?? f.properties?.id);
     }
     return result.slice(0, 10);
   } catch {
     return [];
   }
+}
+
+// ---- 切符ルール適用 ----
+type PassCatalog = { id: string; name: string; rules?: any }[];
+let cachedPassCatalog: PassCatalog | null = null;
+async function loadPassCatalog(): Promise<PassCatalog> {
+  if (cachedPassCatalog) return cachedPassCatalog as PassCatalog;
+  try {
+    const passPath = path.join(process.cwd(), 'data', 'pass', 'free_passes.geojson');
+    const json = JSON.parse(await fs.readFile(passPath, 'utf-8')) as any;
+    const arr: PassCatalog = (json.features ?? []).map((f: any) => ({ id: f.properties?.id, name: f.properties?.name ?? f.properties?.id, rules: f.properties?.rules }));
+    cachedPassCatalog = arr;
+    return arr;
+  } catch {
+    const arr: PassCatalog = [];
+    cachedPassCatalog = arr;
+    return arr;
+  }
+}
+
+async function getPassNames(passIds: string[]): Promise<string[]> {
+  const catalog = await loadPassCatalog();
+  const map = new Map(catalog.map((p) => [p.id, p.name] as const));
+  return passIds.map((id) => map.get(id) ?? id);
+}
+
+function isJRLikeOperator(opJa: string): boolean {
+  return opJa.includes('ＪＲ') || opJa.includes('JR');
+}
+
+function isOperatorCoveredByJRWildcard(opJa: string, incOps: string[]): boolean {
+  // include に 'JR' が含まれていれば JR 系の事業者全体をカバーとみなす
+  if (incOps.includes('JR')) return isJRLikeOperator(opJa);
+  return false;
+}
+
+const OPERATOR_MAP: Record<string, (opJa: string) => boolean> = {
+  'JR': (s) => isJRLikeOperator(s),
+  'JR Hokkaido': (s) => s.includes('ＪＲ北海道') || s.includes('JR北海道'),
+  'JR East': (s) => s.includes('ＪＲ東日本') || s.includes('JR東日本'),
+  'JR Central': (s) => s.includes('ＪＲ東海') || s.includes('JR東海'),
+  'JR West': (s) => s.includes('ＪＲ西日本') || s.includes('JR西日本'),
+  'JR Shikoku': (s) => s.includes('ＪＲ四国') || s.includes('JR四国'),
+  'JR Kyushu': (s) => s.includes('ＪＲ九州') || s.includes('JR九州'),
+  'Aoimori Railway': (s) => s.includes('青い森鉄道'),
+  'IGR Iwate Galaxy Railway': (s) => s.includes('IGR') || s.includes('いわて銀河鉄道') || s.includes('ＩＧＲ'),
+  'Hokuetsu Express': (s) => s.includes('北越急行'),
+  'Tokyo Monorail': (s) => s.includes('東京モノレール'),
+  'TWR Rinkai Line': (s) => s.includes('東京臨海高速鉄道') || s.includes('りんかい線'),
+  'Meitetsu': (s) => s.includes('名古屋鉄道'),
+  'Kintetsu': (s) => s.includes('近畿日本鉄道'),
+  'Nankai': (s) => s.includes('南海電気鉄道') || s.includes('南海'),
+  'Shizutetsu': (s) => s.includes('静岡鉄道'),
+  'Enshu Railway': (s) => s.includes('遠州鉄道'),
+  'Aichi Loop Railway': (s) => s.includes('愛知環状鉄道'),
+  'Yoro Railway': (s) => s.includes('養老鉄道'),
+  'Izu Kyuko': (s) => s.includes('伊豆急行'),
+  'Izuhakone Railway': (s) => s.includes('伊豆箱根鉄道'),
+  'Sangi Railway': (s) => s.includes('三岐鉄道'),
+  'Nagaragawa Railway': (s) => s.includes('長良川鉄道'),
+  'Akechi Railway': (s) => s.includes('明知鉄道'),
+  'Tenryu Hamanako Railroad': (s) => s.includes('天竜浜名湖鉄道'),
+  'Ise Railway': (s) => s.includes('伊勢鉄道'),
+  'Yokkaichi Asunarou Railway': (s) => s.includes('四日市あすなろう鉄道'),
+  'Toyohashi Railroad': (s) => s.includes('豊橋鉄道'),
+  'Minatomirai Line': (s) => s.includes('横浜高速鉄道') || s.includes('みなとみらい'),
+};
+
+function matchOperatorByRule(opJa: string, ruleOperator?: string): boolean {
+  if (!ruleOperator) return true;
+  const fn = OPERATOR_MAP[ruleOperator];
+  if (fn) return fn(opJa);
+  // Fallback: substring (英字が含まれている場合など)
+  return opJa.toLowerCase().includes(ruleOperator.toLowerCase());
+}
+
+function isShinkansenLine(lineName?: string): boolean {
+  const s = lineName ?? '';
+  return s.includes('新幹線');
+}
+
+async function buildAllowEdge(passIds: string[]): Promise<(e: Edge) => boolean> {
+  // Transfer は常に許可（駅構内の移動）
+  const base = (e: Edge) => e.operator === 'Transfer' ? true : !isShinkansenLine(e.line);
+
+  if (!passIds || passIds.length === 0) return base;
+
+  const catalog = await loadPassCatalog();
+  const selected = catalog.filter((p) => passIds.includes(p.id));
+  if (selected.length === 0) return base;
+
+  type SinglePredicate = (e: Edge) => boolean;
+  const makeSingle = (rules: any): SinglePredicate => {
+    const includeArr: any[] = Array.isArray(rules?.include) ? rules.include : [];
+    const excludeArr: any[] = Array.isArray(rules?.exclude) ? rules.exclude : [];
+
+    // include: オペレータのいずれかに一致すれば可
+    const includeOps = includeArr.map((x) => x?.operator).filter(Boolean) as string[];
+    const includesShinkansen = includeArr.some((x) => (x?.service ?? []).includes?.('Shinkansen'));
+    const excludeShinkansen = excludeArr.some((x) => (x?.service ?? []).includes?.('Shinkansen'));
+
+    return (e: Edge) => {
+      if (e.operator === 'Transfer') return true;
+      const line = e.line ?? '';
+      // 新幹線の扱い
+      if (isShinkansenLine(line)) {
+        if (excludeShinkansen) return false;
+        if (!includesShinkansen) return false;
+      }
+      // include が無い場合は事業者で制限できないため base に委譲
+      if (includeOps.length === 0) return base(e);
+      // JR ワイルドカード
+      if (includeOps.includes('JR') && isJRLikeOperator(e.operator)) return true;
+      // 明示オペレータ
+      for (const op of includeOps) {
+        if (matchOperatorByRule(e.operator, op)) return true;
+      }
+      return false;
+    };
+  };
+
+  const predicates = selected.map((p) => makeSingle(p.rules));
+  // 複数切符が指定された場合は和集合
+  return (e: Edge) => predicates.some((f) => f(e));
 }
 

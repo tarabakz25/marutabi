@@ -53,12 +53,32 @@ export default function MapWithSidebar() {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchToken, setSearchToken] = useState<number>(0);
+  const passIdsRef = useRef<string[] | null>(null);
+  const [passIdsState, setPassIdsState] = useState<string[]>([]);
 
   const handleSearch = () => {
     // selection should contain at least origin & destination
     if (!selection.origin || !selection.destination) return;
     setSearchToken(Date.now());
   };
+
+  useEffect(() => {
+    // Sidebar からの passIds 受信
+    const onPassIds = (e: Event) => {
+      const ce = e as CustomEvent<{ passIds: string[] }>;
+      const arr = Array.isArray(ce.detail?.passIds) ? ce.detail.passIds : [];
+      passIdsRef.current = arr;
+      setPassIdsState(arr);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('route:passIds', onPassIds as EventListener);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('route:passIds', onPassIds as EventListener);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const points: StationSelection[] = [];
@@ -77,12 +97,15 @@ export default function MapWithSidebar() {
       setLoading(true);
       setError(null);
       try {
-        const body = {
+        const body: any = {
           origin: selection.origin!.id,
           destination: selection.destination!.id,
           via: selection.vias.map((v) => v.id),
           priority: "optimal",
         };
+        if (passIdsRef.current && passIdsRef.current.length > 0) {
+          body.passIds = passIdsRef.current;
+        }
         const res = await fetch(`/api/map/route`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -152,7 +175,7 @@ export default function MapWithSidebar() {
   };
 
   return (
-    <div className="w-full h-[100dvh] flex relative">
+    <div className="w-full h-[calc(100dvh-5rem)] relative">
       <Sidebar
         mode={mode}
         selection={selection}
@@ -164,8 +187,8 @@ export default function MapWithSidebar() {
         onStationSelected={handleStationSelectedFromSearch}
         onEvaluateNavigate={handleEvaluateNavigate}
       />
-      <div className="flex-1 relative" ref={containerRef}>
-        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} routeStations={routeResult?.routeStations} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} />
+      <div className="absolute inset-0" ref={containerRef}>
+        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} routeStations={routeResult?.routeStations} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} passIds={passIdsState} />
         {error && (
           <div className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 text-xs shadow">{error}</div>
         )}

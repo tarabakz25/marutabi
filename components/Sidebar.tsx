@@ -5,6 +5,7 @@ import type { SelectionMode, SelectedStations } from "@/components/Map/types";
 import type { RouteResult } from "@/lib/route";
 import { FaCircle, FaPlus, FaTimes } from "react-icons/fa";
 import { useState, useEffect } from 'react';
+import { Separator } from "@/components/ui/separator";
 
 type StationSearchResult = {
   id: string;
@@ -160,30 +161,59 @@ const RouteTimeline = ({ selection, routeResult }: { selection: SelectedStations
     transfer: 'bg-amber-100 text-amber-700',
   }[t]);
 
+  // features を安全に参照（不足時は末尾を使う）
+  const getFeatureForIndex = (i: number) => {
+    const feats = routeResult.geojson.features;
+    if (!feats || feats.length === 0) return undefined as any;
+    const idx = Math.min(i, feats.length - 1);
+    return feats[idx];
+  };
+
+  // タイムラインに沿って区間インデックスを進める（非乗換アイテムで進む）
+  let segIdx = 0;
   return (
     <div className="space-y-4">
-      {timelineItems.map((item, idx) => (
-        <div key={item.id + idx} className="flex items-start gap-3">
-          <div className="flex flex-col items-center">
-            <FaCircle className={`${typeColor(item.type)} w-3 h-3`} />
-            {idx !== timelineItems.length - 1 && <div className="flex-1 w-px bg-slate-300 mt-0.5" />}
-          </div>
-          <div className="flex-1">
-            <div className="font-medium text-sm">
-              <span className={`mr-2 inline-block px-1.5 py-0.5 text-[10px] rounded ${typeBgColor(item.type)}`}>
-                {typeLabel(item.type)}
-              </span>
-              {item.name}
+      {timelineItems.map((item, idx) => {
+        // transfer のときは次区間に進めてから表示（乗換後の路線情報を出す）
+        if (item.type === 'transfer') {
+          segIdx = Math.min(segIdx + 1, (routeResult.geojson.features?.length ?? 1) - 1);
+        }
+        const featureHere = getFeatureForIndex(Math.max(0, segIdx));
+        const lineName = featureHere?.properties?.lineName ?? featureHere?.properties?.operators?.join(', ') ?? '不明';
+        const stationCount = featureHere?.properties?.stationCount ?? 0;
+        // 非乗換（出発/経由/到着）は表示後に区間を進める
+        if (item.type !== 'transfer') segIdx = Math.min(segIdx + 1, (routeResult.geojson.features?.length ?? 1) - 1);
+        return (
+          <div key={item.id + idx} className="flex items-start gap-3">
+            <div className="flex flex-col items-center">
+              <FaCircle className={`${typeColor(item.type)} w-3 h-3`} />
+              {idx !== timelineItems.length - 1 && <div className="flex-1 w-px bg-slate-300 mt-0.5" />}
             </div>
-            {item.type !== 'transfer' && idx < routeResult.geojson.features.length && (
-              <div className="ml-1 mt-1 mb-3 rounded bg-slate-50 p-2 text-xs space-y-0.5">
-                <div>路線: {routeResult.geojson.features[idx].properties?.lineName ?? routeResult.geojson.features[idx].properties?.operators?.join(', ') ?? '不明'}</div>
-                <div>距離: {Math.round(routeResult.geojson.features[idx].properties?.distance ?? 0)} m</div>
+            <div className="flex-1">
+              <div className="font-medium text-sm">
+                <span className={`mr-2 inline-block px-1.5 py-0.5 text-[10px] rounded ${typeBgColor(item.type)}`}>
+                  {typeLabel(item.type)}
+                </span>
+                {item.name}
               </div>
-            )}
+              {/* 非乗換: 路線名 + 通過駅数 */}
+              {item.type !== 'transfer' && featureHere && (
+                <div className="ml-1 mt-1 mb-3 rounded bg-slate-50 p-2 text-xs space-y-0.5">
+                  <div>路線: {lineName}</div>
+                  <div>通過駅数: {stationCount} 駅</div>
+                </div>
+              )}
+              {/* 乗換: 乗換後の路線 + 通過駅数 */}
+              {item.type === 'transfer' && featureHere && (
+                <div className="ml-1 mt-1 mb-3 rounded bg-amber-50 p-2 text-xs space-y-0.5 border border-amber-100">
+                  <div>乗換後: {lineName}</div>
+                  <div>通過駅数: {stationCount} 駅</div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
@@ -224,6 +254,8 @@ export default function Sidebar({
   const [shareOpen, setShareOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string>('');
   const [qrUrl, setQrUrl] = useState<string>('');
+  const [passes, setPasses] = useState<{ id: string; name: string }[]>([]);
+  const [selectedPassIds, setSelectedPassIds] = useState<string[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -239,6 +271,20 @@ export default function Sidebar({
     const t = setTimeout(fetchResults, 300);
     return () => { clearTimeout(t); controller.abort(); };
   }, [query]);
+
+  // 切符一覧ロード
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch('/api/map/passes', { signal: controller.signal });
+        if (!res.ok) return;
+        const data = (await res.json()) as { id: string; name: string }[];
+        setPasses(data);
+      } catch { /* ignore */ }
+    })();
+    return () => controller.abort();
+  }, []);
 
   // 選択が完了した時に入力欄を自動で閉じる
   useEffect(() => {
@@ -319,7 +365,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="h-full w-80 border-r bg-white/70 backdrop-blur p-4 flex flex-col gap-4">
+    <aside className="w-[22rem] fixed left-4 top-24   z-40 rounded-2xl border shadow-lg bg-white/85 backdrop-blur p-4 flex flex-col gap-4 overflow-y-auto max-h-[calc(100dvh-5rem-1rem)]">
       <div className="space-y-2">
         <h2 className="text-base font-semibold">経路検索</h2>
         <p className="text-xs text-muted-foreground">駅名を入力するか地図上の駅をクリック</p>
@@ -365,9 +411,11 @@ export default function Sidebar({
       )}
 
       {/* 駅選択リスト */}
-      <div className="space-y-3">
+      <div className="space-y-3 relative">
+        {/* 左側の縦ライン（丸同士を接続） */}
+        <div className="absolute left-1 top-1 bottom-1 w-px bg-slate-300 pointer-events-none"></div>
         {/* 出発駅 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative z-10">
           <div className="w-2 h-2 rounded-full bg-green-500"></div>
           <div className="flex-1">
             {selection.origin ? (
@@ -402,7 +450,7 @@ export default function Sidebar({
 
         {/* 経由駅 */}
         {selection.vias.map((via, index) => (
-          <div key={`via-${index}`} className="flex items-center gap-2">
+          <div key={`via-${index}`} className="flex items-center gap-2 relative z-10">
             <div className="w-2 h-2 rounded-full bg-blue-500"></div>
             <div className="flex-1">
               <div className="flex items-center justify-between">
@@ -432,7 +480,7 @@ export default function Sidebar({
         ))}
 
         {/* 経由駅追加 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative z-10">
           <div className="w-2 h-2 rounded-full bg-blue-200"></div>
           <Button 
             variant="outline" 
@@ -446,7 +494,7 @@ export default function Sidebar({
         </div>
 
         {/* 到着駅 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative z-10">
           <div className="w-2 h-2 rounded-full bg-red-500"></div>
           <div className="flex-1">
             {selection.destination ? (
@@ -477,6 +525,67 @@ export default function Sidebar({
               </Button>
             )}
           </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* 切符フィルター */}
+      <div className="space-y-2">
+        <h2 className="text-base font-semibold">切符を選択</h2>
+        <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+          {passes.map((p) => {
+            const active = selectedPassIds.includes(p.id);
+            return (
+              <button
+                key={p.id}
+                className={`text-xs px-2 py-1 rounded border ${active ? 'bg-amber-100 border-amber-300' : 'bg-white hover:bg-slate-50'}`}
+                onClick={() => {
+                  setSelectedPassIds((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id]);
+                }}
+              >
+                {p.name}
+              </button>
+            );
+          })}
+        </div>
+        {selectedPassIds.length > 0 && (
+          <div className="text-xs text-slate-600">選択中: {selectedPassIds.length}件</div>
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold">地域に移動</h2>
+        <div className="grid grid-cols-3 gap-2">
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [141.3545, 43.0618] as [number, number] } }));
+          }}>北海道</Button>
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [140.8719, 38.2688] as [number, number] } }));
+          }}>東北</Button>
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [139.767306, 35.681236] as [number, number] } }));
+          }}>関東</Button>
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [137.2137, 36.6953] as [number, number] } }));
+          }}>中部</Button>
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [135.5031, 34.6937] as [number, number] } }));
+          }}>近畿</Button>
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [132.4553, 34.3853] as [number, number] } }));
+          }}>中国</Button>
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [134.5593, 34.0657] as [number, number] } }));
+          }}>四国</Button>
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [130.4181, 33.5904] as [number, number] } }));
+          }}>九州</Button>
+          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [127.6809, 26.2124] as [number, number] } }));
+          }}>沖縄</Button>
         </div>
       </div>
 
@@ -539,11 +648,16 @@ export default function Sidebar({
         </div>
       )}
 
-      <div className="mt-auto flex gap-2">
+      <div className="flex gap-2">
         {!showEvalView ? (
           <>
-            <Button onClick={onSearch} className="w-full">検索する</Button>
-            <Button variant="outline" onClick={onClearAll} className="w-full">クリア</Button>
+            <Button onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('route:passIds', { detail: { passIds: selectedPassIds } }));
+              }
+              onSearch();
+            }} className="w-1/2">検索する</Button>
+            <Button variant="outline" onClick={onClearAll} className="w-1/2">クリア</Button>
           </>
         ) : (
           <>
@@ -552,6 +666,7 @@ export default function Sidebar({
           </>
         )}
       </div>
+
 
       {shareOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

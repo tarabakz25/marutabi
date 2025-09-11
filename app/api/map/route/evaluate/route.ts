@@ -34,10 +34,15 @@ export async function POST(req: NextRequest) {
       const viaParam = body?.via as string[] | string | undefined;
       const via = Array.isArray(viaParam) ? viaParam : viaParam ? [viaParam] : [];
       const priority = (body?.priority as 'time' | 'cost' | 'optimal') ?? 'optimal';
+      const passIds = Array.isArray(body?.passIds)
+        ? (body.passIds as string[])
+        : body?.passIds
+          ? [String(body.passIds)]
+          : [];
       if (!origin || !destination) {
         return NextResponse.json({ error: 'origin and destination are required' }, { status: 400 });
       }
-      route = await findRoute({ originId: origin, destinationId: destination, viaIds: via, priority });
+      route = await findRoute({ originId: origin, destinationId: destination, viaIds: via, priority, passIds });
     }
 
     const evalInput = toEvaluationInput(route);
