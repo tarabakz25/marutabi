@@ -1,14 +1,7 @@
 import Link from 'next/link';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { User, Map, FileText, Settings } from 'lucide-react';
-
-const sidebarItems = [
-  { label: 'Profile', href: '/dashboard', icon: User },
-  { label: 'Trips', href: '/trips', icon: Map },
-  { label: 'Blogs', href: '/blogs', icon: FileText },
-  { label: 'Settings', href: '/settings', icon: Settings },
-];
+import { FileText } from 'lucide-react';
 
 async function fetchPublicRatings() {
   try {
@@ -24,13 +17,12 @@ export default async function BlogPage() {
   const ratings = await fetchPublicRatings();
   return (
     <SidebarProvider>
-      <DashboardSidebar items={sidebarItems} />
+      <DashboardSidebar />
       <SidebarInset>
         <div className="p-12">
           <div className="max-w-4xl space-y-6 mx-auto">
             <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl font-semibold">みんなの旅の評価</h1>
-              <Link href="/" className="text-sm text-slate-600 underline">ホームへ</Link>
+              <h1 className="text-2xl font-semibold">みんなの旅を見てみる</h1>
             </div>
             <div className="grid gap-4">
               {ratings.map((r) => (

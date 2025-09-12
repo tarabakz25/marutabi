@@ -222,9 +222,22 @@ export default function MapWithSidebar() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const takeScreenshot = (): string | null => {
     try {
-      const el = containerRef.current?.querySelector('canvas');
+      const el = containerRef.current?.querySelector('canvas') as HTMLCanvasElement | null;
       if (!el) return null;
-      const dataUrl = (el as HTMLCanvasElement).toDataURL('image/png');
+      // 画像サイズを抑えるために最大幅を 1200px に縮小しつつ JPEG で保存
+      const srcW = Math.max(1, el.width);
+      const srcH = Math.max(1, el.height);
+      const maxW = 1200;
+      const scale = Math.min(1, maxW / srcW);
+      const dstW = Math.max(1, Math.floor(srcW * scale));
+      const dstH = Math.max(1, Math.floor(srcH * scale));
+      const off = document.createElement('canvas');
+      off.width = dstW;
+      off.height = dstH;
+      const ctx = off.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(el, 0, 0, srcW, srcH, 0, 0, dstW, dstH);
+      const dataUrl = off.toDataURL('image/jpeg', 0.85);
       return dataUrl;
     } catch {
       return null;
@@ -287,7 +300,7 @@ export default function MapWithSidebar() {
           </div>
         )}
         {routeResult && (
-          <div className="absolute right-4 top-24 z-40 w-[22rem] rounded border bg-white p-3 text-sm space-y-2 shadow-lg">
+          <div className="absolute right-4 top-4 z-40 w-[22rem] rounded-lg border bg-white p-3 text-sm space-y-2 shadow-lg">
             <div className="font-semibold">このルートを保存</div>
             <input
               value={saveTitle}

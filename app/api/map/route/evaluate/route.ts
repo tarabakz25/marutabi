@@ -6,6 +6,8 @@ import { getCourse, getStationCode } from '@/lib/ekispert';
 
 export const dynamic = 'force-dynamic';
 
+type SegmentInfo = { fromId: string; toId: string; fromName: string; toName: string; minutes: number };
+
 function toEvaluationInput(result: RouteResult): RouteEvaluationInput {
   const totalDistance = result.summary?.distanceTotal ?? 0;
   const totalTimeMinutes = result.summary?.timeTotal ?? 0;
@@ -47,6 +49,43 @@ export async function POST(req: NextRequest) {
     }
 
     const evalInput = toEvaluationInput(route);
+
+    // Build ordered segments from GeoJSON features
+    function extractSegments(r: RouteResult): SegmentInfo[] {
+      try {
+        const features = r.geojson.features ?? [];
+        const stationMap = new Map(r.routeStations.map((s) => [s.id, s.name ?? ''] as const));
+        type Tmp = { seq: number; from: string; to: string; minutes: number };
+        const list: Tmp[] = [];
+        for (const f of features) {
+          const p = (f.properties as any) ?? {};
+          const seq = Number(p.seq ?? -1);
+          const from = String(p.from ?? '');
+          const to = String(p.to ?? '');
+          const minutes = Number(p.time ?? 0);
+          if (seq >= 0 && from && to) list.push({ seq, from, to, minutes });
+        }
+        list.sort((a, b) => a.seq - b.seq);
+        return list.map((it) => ({
+          fromId: it.from,
+          toId: it.to,
+          fromName: stationMap.get(it.from) ?? '',
+          toName: stationMap.get(it.to) ?? '',
+          minutes: Math.max(0, Math.round(it.minutes || 0)),
+        })).filter((s) => s.fromName && s.toName);
+      } catch {
+        return [];
+      }
+    }
+
+    const segments = extractSegments(route);
+
+    function buildSegmentSummary(segs: SegmentInfo[]): string {
+      if (segs.length === 0) return '';
+      const items = segs.map((s, i) => `${i + 1}) ${s.fromName} → ${s.toName} (${s.minutes}分)`).join('\n');
+      const total = segs.reduce((a, b) => a + b.minutes, 0);
+      return `区間一覧(順番通り):\n${items}\n概算合計時間: ${total}分`;
+    }
 
     // Try to compute accurate metrics via Ekispert per leg when possible
     async function computeAccurateMetrics(r: RouteResult): Promise<{ totalFare: number; totalTimeMinutes: number; totalDistance: number } | null> {
@@ -91,7 +130,8 @@ export async function POST(req: NextRequest) {
     let llm: any = null;
     try {
       if (process.env.OPENAI_API_KEY) {
-        llm = await evaluateRouteWithLLM({ ...evalInput, locale: 'ja', style: 'concise' });
+        const userNotes = buildSegmentSummary(segments);
+        llm = await evaluateRouteWithLLM({ ...evalInput, locale: 'ja', style: 'concise', userNotes });
         (llm as any).source = 'openai';
       } else {
         llm = {
@@ -108,6 +148,48 @@ export async function POST(req: NextRequest) {
       llm = { reasons: ['評価でエラーが発生しました'], comment: '評価に失敗しました', source: 'error', errorMessage: e instanceof Error ? e.message : String(e) };
     }
 
+    // Fallback schedule generator when LLM does not provide one
+    function minutesToTimeStr(totalMinutes: number): string {
+      const m = ((totalMinutes % 1440) + 1440) % 1440;
+      const h = Math.floor(m / 60);
+      const r = m % 60;
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${pad(h)}:${pad(r)}`;
+    }
+
+    function buildFallbackSchedule(segs: SegmentInfo[]): { time: string; title: string; description?: string }[] {
+      if (segs.length === 0) return [];
+      const start = 8 * 60; // 08:00 JST
+      let cursor = start;
+      const items: { time: string; title: string; description?: string }[] = [];
+      for (let i = 0; i < segs.length; i++) {
+        const s = segs[i];
+        items.push({
+          time: minutesToTimeStr(cursor),
+          title: `${s.fromName} → ${s.toName} 乗車`,
+          description: `移動 約${s.minutes}分`,
+        });
+        cursor += Math.max(1, s.minutes);
+        if (i < segs.length - 1) {
+          items.push({
+            time: minutesToTimeStr(cursor),
+            title: '乗換準備',
+            description: 'ホーム移動・案内を確認',
+          });
+          cursor += 5; // small buffer for transfer
+        }
+      }
+      const final = segs[segs.length - 1];
+      items.push({
+        time: minutesToTimeStr(cursor),
+        title: `${final.toName} 到着`,
+        description: 'おつかれさまです',
+      });
+      return items.slice(0, 12);
+    }
+
+    const fallbackSchedule = buildFallbackSchedule(segments);
+
     return NextResponse.json({
       metrics: {
         totalTimeMinutes: accurate?.totalTimeMinutes ?? evalInput.totalTimeMinutes,
@@ -116,7 +198,9 @@ export async function POST(req: NextRequest) {
         totalDistance: accurate?.totalDistance ?? evalInput.totalDistance,
       },
       llm,
-      schedule: llm?.schedule ?? undefined,
+      schedule: (llm && Array.isArray((llm as any).schedule) && (llm as any).schedule.length > 0)
+        ? (llm as any).schedule
+        : (fallbackSchedule.length > 0 ? fallbackSchedule : undefined),
     }, { headers: { 'content-type': 'application/json; charset=utf-8' } });
   } catch (e) {
     console.error('Failed to evaluate route:', e);
