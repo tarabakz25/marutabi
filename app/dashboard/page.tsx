@@ -34,7 +34,7 @@ export default async function DashboardPage() {
     },
     {
       label: "Settings",
-      href: "/dashboard/settings",
+      href: "/settings",
       icon: Settings,
     },
   ]
@@ -56,5 +56,4 @@ export default async function DashboardPage() {
     </SidebarProvider>
   )
 }
-
 
