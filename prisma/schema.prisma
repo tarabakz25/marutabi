@@ -66,3 +66,18 @@ model Profile {
   user User @relation(fields: [userId], references: [id])
   @@index([userId])
 }
+
+model Trip {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  note      String?
+  // 駅IDなどの選択情報（出発・到着・経由・優先度・切符IDなど）
+  selection Json
+  // 計算済みのルート結果（lib/route.ts の RouteResult をJSONで保存）
+  route     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
