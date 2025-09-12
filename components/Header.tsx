@@ -13,6 +13,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Nanum_Gothic_Coding } from "next/font/google";
+
+const nanumGothicCoding = Nanum_Gothic_Coding({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
 
 export default async function Header() {
   const session = await getServerSession(authOptions);
@@ -23,7 +29,7 @@ export default async function Header() {
   return (
     <div className="w-full h-20 sticky top-0 z-50 bg-white border-b flex items-center justify-between px-6">
       <div className="flex-1">
-        <Link href='/marketing' className="text-2xl font-bold">まるたび</Link>
+        <Link href='/marketing' className={`text-2xl font-bold ${nanumGothicCoding.className}`}>まるたび</Link>
       </div>
       <div className="flex items-center gap-3">
         <HeaderActions />
