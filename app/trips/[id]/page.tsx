@@ -1,17 +1,16 @@
 import Link from 'next/link';
+import { requireUser } from '@/lib/auth';
+import { getTripById } from '@/lib/trips';
 
 type Params = { params: { id: string } };
 
-async function fetchTrip(id: string) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/trips/${id}`, { cache: 'no-store' });
-  if (!res.ok) return null;
-  const json = await res.json();
-  return (json?.trip ?? null) as any;
-}
-
 export default async function TripDetailPage({ params }: Params) {
   const { id } = params;
-  const trip = await fetchTrip(id);
+  let trip: any = null;
+  try {
+    const { userId } = await requireUser();
+    trip = await getTripById(id, userId);
+  } catch {}
   if (!trip) {
     return (
       <main className="min-h-screen px-6 py-10">

@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import type { SelectionMode, SelectedStations } from "@/components/Map/types";
 import type { RouteResult } from "@/lib/route";
 import { FaCircle, FaPlus, FaTimes } from "react-icons/fa";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Separator } from "@/components/ui/separator";
 
 type StationSearchResult = {
@@ -227,6 +228,7 @@ type Props = {
   onRemoveVia: (index: number) => void;
   onSearch: () => void;
   routeResult?: RouteResult | null;
+  onBackFromResults?: () => void;
 };
 
 export default function Sidebar({
@@ -239,11 +241,20 @@ export default function Sidebar({
   routeResult,
   onStationSelected,
   onEvaluateNavigate,
-}: Props & { onStationSelected: (s: StationSearchResult) => void; onEvaluateNavigate?: (route: RouteResult) => void; }) {
+  savedTitle,
+  onBackFromResults,
+}: Props & { onStationSelected: (s: StationSearchResult) => void; onEvaluateNavigate?: (route: RouteResult) => void; savedTitle?: string }) {
 
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<StationSearchResult[]>([]);
   const [activeInput, setActiveInput] = useState<'origin' | 'destination' | number | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const selectionSnapshotRef = useRef<{ originId?: string; destinationId?: string; viaIds: Array<string | undefined> }>({
+    originId: undefined,
+    destinationId: undefined,
+    viaIds: [],
+  });
   const [evaluating, setEvaluating] = useState(false);
   const [evalResult, setEvalResult] = useState<{
     composite?: { score: number; breakdown: { timeScore: number; fareScore: number; transferScore: number; distanceScore: number } };
@@ -260,6 +271,11 @@ export default function Sidebar({
   const [saving, setSaving] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Prefill saved title when provided
+  useEffect(() => {
+    if (savedTitle && !saveTitle) setSaveTitle(savedTitle);
+  }, [savedTitle]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -290,22 +306,37 @@ export default function Sidebar({
     return () => controller.abort();
   }, []);
 
-  // 選択が完了した時に入力欄を自動で閉じる
+  // 選択が実際に変化したときだけ入力欄を閉じる
   useEffect(() => {
-    if (activeInput === 'origin' && selection.origin) {
-      setActiveInput(null);
-      setQuery('');
-      setResults([]);
-    } else if (activeInput === 'destination' && selection.destination) {
-      setActiveInput(null);
-      setQuery('');
-      setResults([]);
-    } else if (typeof activeInput === 'number' && selection.vias[activeInput]) {
-      setActiveInput(null);
-      setQuery('');
-      setResults([]);
+    if (!isEditing) return;
+    if (activeInput === 'origin' && selection.origin?.id) {
+      const before = selectionSnapshotRef.current.originId;
+      if (selection.origin.id !== before) {
+        setActiveInput(null);
+        setQuery('');
+        setResults([]);
+        setIsEditing(false);
+      }
+    } else if (activeInput === 'destination' && selection.destination?.id) {
+      const before = selectionSnapshotRef.current.destinationId;
+      if (selection.destination.id !== before) {
+        setActiveInput(null);
+        setQuery('');
+        setResults([]);
+        setIsEditing(false);
+      }
+    } else if (typeof activeInput === 'number') {
+      const beforeViaIds = selectionSnapshotRef.current.viaIds;
+      const before = beforeViaIds[activeInput];
+      const curr = selection.vias[activeInput]?.id;
+      if (curr && curr !== before) {
+        setActiveInput(null);
+        setQuery('');
+        setResults([]);
+        setIsEditing(false);
+      }
     }
-  }, [selection, activeInput]);
+  }, [selection, activeInput, isEditing]);
 
   // 検索結果が到着したら結果ビューを表示
   useEffect(() => {
@@ -324,6 +355,12 @@ export default function Sidebar({
   };
 
   const addViaStation = () => {
+    selectionSnapshotRef.current = {
+      originId: selection.origin?.id,
+      destinationId: selection.destination?.id,
+      viaIds: selection.vias.map(v => v?.id),
+    };
+    setIsEditing(true);
     setActiveInput(selection.vias.length);
     onChangeMode('via');
   };
@@ -336,6 +373,7 @@ export default function Sidebar({
     setActiveInput(null);
     setQuery('');
     setResults([]);
+    setIsEditing(false);
   };
 
   const handleEvaluate = async () => {
@@ -436,6 +474,12 @@ export default function Sidebar({
                   size="sm" 
                   variant="ghost" 
                   onClick={() => {
+                    selectionSnapshotRef.current = {
+                      originId: selection.origin?.id,
+                      destinationId: selection.destination?.id,
+                      viaIds: selection.vias.map(v => v?.id),
+                    };
+                    setIsEditing(true);
                     setActiveInput('origin');
                     onChangeMode('origin');
                   }}
@@ -471,6 +515,12 @@ export default function Sidebar({
                     size="sm" 
                     variant="ghost" 
                     onClick={() => {
+                      selectionSnapshotRef.current = {
+                        originId: selection.origin?.id,
+                        destinationId: selection.destination?.id,
+                        viaIds: selection.vias.map(v => v?.id),
+                      };
+                      setIsEditing(true);
                       setActiveInput(index);
                       onChangeMode('via');
                     }}
@@ -515,6 +565,12 @@ export default function Sidebar({
                   size="sm" 
                   variant="ghost" 
                   onClick={() => {
+                    selectionSnapshotRef.current = {
+                      originId: selection.origin?.id,
+                      destinationId: selection.destination?.id,
+                      viaIds: selection.vias.map(v => v?.id),
+                    };
+                    setIsEditing(true);
                     setActiveInput('destination');
                     onChangeMode('destination');
                   }}
@@ -622,6 +678,7 @@ export default function Sidebar({
                     });
                     if (!res.ok) throw new Error(await res.text());
                     setSaveTitle('');
+                    router.push('/trips');
                   } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
                     setSaveError(msg);
@@ -691,7 +748,14 @@ export default function Sidebar({
           ) : (
             <>
               <Button onClick={handleEvaluate} disabled={evaluating} className="w-1/2">評価する</Button>
-              <Button variant="outline" onClick={() => setShowResults(false)} className="w-1/2">戻る</Button>
+              <Button 
+                variant="outline" 
+                onClick={() => { 
+                  try { onBackFromResults?.(); } catch {}
+                  setShowResults(false); 
+                }} 
+                className="w-1/2"
+              >戻る</Button>
             </>
           )
         ) : (

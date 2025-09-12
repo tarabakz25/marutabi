@@ -15,6 +15,8 @@ export type DeckMapProps = {
   flyTo?: [number, number] | null;
   /** マップの初期ロード完了時に呼び出される */
   onLoadComplete?: () => void;
+  /** ビューを初期位置・固定ズームにリセットするためのトリガー（タイムスタンプなど） */
+  shouldResetView?: number;
 };
 
 export const Map = (props: DeckMapProps) => {
