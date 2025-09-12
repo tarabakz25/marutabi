@@ -14,7 +14,7 @@ type StationSearchResult = {
 };
 
 // Timeline component
-const RouteTimeline = ({ selection, routeResult }: { selection: SelectedStations; routeResult: RouteResult }) => {
+export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedStations; routeResult: RouteResult }) => {
   // 乗り換え駅の情報を取得する関数
   const getTransferInfo = (transferId: string) => {
     // まずrouteStationsから検索
@@ -256,6 +256,7 @@ export default function Sidebar({
   const [qrUrl, setQrUrl] = useState<string>('');
   const [passes, setPasses] = useState<{ id: string; name: string }[]>([]);
   const [selectedPassIds, setSelectedPassIds] = useState<string[]>([]);
+  const [showResults, setShowResults] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -302,6 +303,11 @@ export default function Sidebar({
       setResults([]);
     }
   }, [selection, activeInput]);
+
+  // 検索結果が到着したら結果ビューを表示
+  useEffect(() => {
+    if (routeResult) setShowResults(true);
+  }, [routeResult]);
 
   const handleStationSelect = (station: StationSearchResult) => {
     if (activeInput === 'origin') {
@@ -366,10 +372,12 @@ export default function Sidebar({
 
   return (
     <aside className="w-[22rem] fixed left-4 top-24   z-40 rounded-2xl border shadow-lg bg-white/85 backdrop-blur p-4 flex flex-col gap-4 overflow-y-auto max-h-[calc(100dvh-5rem-1rem)]">
-      <div className="space-y-2">
-        <h2 className="text-base font-semibold">経路検索</h2>
-        <p className="text-xs text-muted-foreground">駅名を入力するか地図上の駅をクリック</p>
-      </div>
+      {!showResults && (
+        <div className="space-y-2">
+          <h2 className="text-base font-semibold">経路検索</h2>
+          <p className="text-xs text-muted-foreground">駅名を入力するか地図上の駅をクリック</p>
+        </div>
+      )}
 
       {/* 駅名検索 */}
       {activeInput !== null && (
@@ -528,69 +536,45 @@ export default function Sidebar({
         </div>
       </div>
 
-      <Separator />
+      {!showResults && <Separator />}
 
-      {/* 切符フィルター */}
-      <div className="space-y-2">
-        <h2 className="text-base font-semibold">切符を選択</h2>
-        <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-          {passes.map((p) => {
-            const active = selectedPassIds.includes(p.id);
-            return (
-              <button
-                key={p.id}
-                className={`text-xs px-2 py-1 rounded border ${active ? 'bg-amber-100 border-amber-300' : 'bg-white hover:bg-slate-50'}`}
-                onClick={() => {
-                  setSelectedPassIds((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id]);
-                }}
-              >
-                {p.name}
-              </button>
-            );
-          })}
+      {!showResults && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-base font-semibold">地域に移動</h2>
+          <div className="grid grid-cols-3 gap-2">
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [141.3545, 43.0618] as [number, number] } }));
+            }}>北海道</Button>
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [140.8719, 38.2688] as [number, number] } }));
+            }}>東北</Button>
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [139.767306, 35.681236] as [number, number] } }));
+            }}>関東</Button>
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [137.2137, 36.6953] as [number, number] } }));
+            }}>中部</Button>
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [135.5031, 34.6937] as [number, number] } }));
+            }}>近畿</Button>
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [132.4553, 34.3853] as [number, number] } }));
+            }}>中国</Button>
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [134.5593, 34.0657] as [number, number] } }));
+            }}>四国</Button>
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [130.4181, 33.5904] as [number, number] } }));
+            }}>九州</Button>
+            <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
+              window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [127.6809, 26.2124] as [number, number] } }));
+            }}>沖縄</Button>
+          </div>
         </div>
-        {selectedPassIds.length > 0 && (
-          <div className="text-xs text-slate-600">選択中: {selectedPassIds.length}件</div>
-        )}
-      </div>
-
-      <Separator />
-
-      <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold">地域に移動</h2>
-        <div className="grid grid-cols-3 gap-2">
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [141.3545, 43.0618] as [number, number] } }));
-          }}>北海道</Button>
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [140.8719, 38.2688] as [number, number] } }));
-          }}>東北</Button>
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [139.767306, 35.681236] as [number, number] } }));
-          }}>関東</Button>
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [137.2137, 36.6953] as [number, number] } }));
-          }}>中部</Button>
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [135.5031, 34.6937] as [number, number] } }));
-          }}>近畿</Button>
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [132.4553, 34.3853] as [number, number] } }));
-          }}>中国</Button>
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [134.5593, 34.0657] as [number, number] } }));
-          }}>四国</Button>
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [130.4181, 33.5904] as [number, number] } }));
-          }}>九州</Button>
-          <Button className="bg-white text-black hover:bg-gray-200" onClick={() => {
-            window.dispatchEvent(new CustomEvent('map:flyTo', { detail: { position: [127.6809, 26.2124] as [number, number] } }));
-          }}>沖縄</Button>
-        </div>
-      </div>
+      )}
 
       {/* 検索結果 / 評価ビュー */}
-      {routeResult && !showEvalView && (
+      {routeResult && showResults && !showEvalView && (
         <div className="space-y-2 mt-4 overflow-y-auto flex-1 pr-1">
           <h3 className="text-base font-semibold">検索結果</h3>
           {routeResult.summary?.passes && routeResult.summary.passes.length > 0 && (
@@ -602,14 +586,9 @@ export default function Sidebar({
             </div>
           )}
           <RouteTimeline selection={selection} routeResult={routeResult} />
-          <div className="pt-2 space-y-2">
-            <Button onClick={handleEvaluate} disabled={evaluating} className="w-full">
-              {evaluating ? '評価中...' : '評価する'}
-            </Button>
-            {evalError && (
-              <div className="text-xs text-red-600">{evalError}</div>
-            )}
-          </div>
+          {evalError && (
+            <div className="text-xs text-red-600">{evalError}</div>
+          )}
         </div>
       )}
 
@@ -650,15 +629,22 @@ export default function Sidebar({
 
       <div className="flex gap-2">
         {!showEvalView ? (
-          <>
-            <Button onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('route:passIds', { detail: { passIds: selectedPassIds } }));
-              }
-              onSearch();
-            }} className="w-1/2">検索する</Button>
-            <Button variant="outline" onClick={onClearAll} className="w-1/2">クリア</Button>
-          </>
+          !showResults ? (
+            <>
+              <Button onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('route:passIds', { detail: { passIds: selectedPassIds } }));
+                }
+                onSearch();
+              }} className="w-1/2">検索する</Button>
+              <Button variant="outline" onClick={onClearAll} className="w-1/2">クリア</Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={handleEvaluate} disabled={evaluating} className="w-1/2">評価する</Button>
+              <Button variant="outline" onClick={() => setShowResults(false)} className="w-1/2">戻る</Button>
+            </>
+          )
         ) : (
           <>
             <Button onClick={openShare} className="w-full">友達にシェア</Button>

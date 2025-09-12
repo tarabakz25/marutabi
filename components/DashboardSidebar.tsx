@@ -11,22 +11,22 @@ import Link from "next/link";
 const sidebarItems = [
   {
     label: "Profile",
-    href: "/dashboard/profile",
+    href: "/dashboard",
     icon: User,
   },
   {
     label: "Trips",
-    href: "/trips/new",
+    href: "/trips",
     icon: Map,
   },
   {
     label: "Blogs",
-    href: "/dashboard/blogs",
+    href: "/blogs",
     icon: FileText,
   },
   {
     label: "Settings",
-    href: "/dashboard/settings",
+    href: "/settings",
     icon: Settings,
   },
 ];

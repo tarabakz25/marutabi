@@ -185,7 +185,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
     return { ...railGeojson, features: feats };
   }, [railGeojson, routeOperators]);
 
-  type StationPoint = { position: [number, number]; name?: string; id?: string };
+  type StationPoint = { position: [number, number]; name?: string; id?: string; lineName?: string };
 
   const stationPointsAll = useMemo<StationPoint[]>(() => {
     if (!stationGeojson?.features) return [] as StationPoint[];
@@ -194,7 +194,10 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
       const g = f?.geometry;
       if (!g) continue;
       let position: [number, number] | undefined;
-      if (g.type === 'LineString' && Array.isArray(g.coordinates)) {
+      if (g.type === 'Point' && Array.isArray(g.coordinates)) {
+        const coords = g.coordinates as [number, number];
+        position = coords as [number, number];
+      } else if (g.type === 'LineString' && Array.isArray(g.coordinates)) {
         const coords = g.coordinates as [number, number][];
         const idx = Math.floor(coords.length / 2);
         position = (coords[idx] ?? coords[0]) as [number, number];
@@ -211,8 +214,9 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
       }
       if (!position) continue;
       const name = f?.properties?.N02_005 as string | undefined;
+      const lineName = f?.properties?.N02_003 as string | undefined;
       const id = (f?.properties?.N02_005c || f?.properties?.N02_005g) as string | undefined;
-      points.push({ position, name, id });
+      points.push({ position, name, id, lineName });
     }
     return points;
   }, [stationGeojson]);
@@ -255,20 +259,24 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
       // 重心計算
       let lonSum = 0;
       let latSum = 0;
-      let name: string | undefined = undefined;
+      let baseName: string | undefined = undefined;
       let id: string | undefined = undefined;
+      const lineSet = new Set<string>();
       for (const p of cluster) {
         lonSum += p.position[0];
         latSum += p.position[1];
-        // 表示名は最初に現れた名前を採用（同一地点で複数名称がある場合は任意選択）
-        if (!name && p.name) name = p.name;
+        // 表示名は最初に現れた名前をベース名とする
+        if (!baseName && p.name) baseName = p.name;
         if (!id && p.id) id = p.id;
+        if (p.lineName) lineSet.add(p.lineName);
       }
       const count = cluster.length;
+      // 代表座標: クラスタの先頭要素を使用（任意の一点）
+      const representative = cluster[0]?.position ?? [lonSum / count, latSum / count];
       return {
-        name,
+        name: baseName,
         id,
-        position: [lonSum / count, latSum / count] as [number, number],
+        position: representative as [number, number],
       };
     });
     return aggregated;
@@ -338,16 +346,22 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
   // TextLayer用の文字セット（日本語対応）
   // 駅名に含まれる全ての文字からユニークな配列を生成
   const characterSet = useMemo(() => {
-    const names: string[] = stationGeojson?.features
+    const stationNames: string[] = stationGeojson?.features
       ?.map((f: any) => f?.properties?.N02_005 as string | undefined)
+      .filter((v: string | undefined): v is string => Boolean(v)) ?? [];
+    const lineNames: string[] = stationGeojson?.features
+      ?.map((f: any) => f?.properties?.N02_003 as string | undefined)
       .filter((v: string | undefined): v is string => Boolean(v)) ?? [];
     const set = new Set<string>();
     // 追加でよく使う記号類も含める
     const common = ' -・()（）[ ]［］/／・,、。.【】『』"' + '\'' +
       '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
     Array.from(common).forEach((c) => set.add(c));
-    for (const name of names) {
+    for (const name of stationNames) {
       for (const ch of Array.from(name)) set.add(ch);
+    }
+    for (const line of lineNames) {
+      for (const ch of Array.from(line)) set.add(ch);
     }
     const result = Array.from(set);
     // eslint-disable-next-line no-console
@@ -359,7 +373,20 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
   const visibleStations = useMemo(() => {
     // 経路がある場合は、経路上の駅のみ表示（出発/到着/経由/乗換を含む）
     if (routeStations && routeStations.length > 0) {
-      return routeStations.map((s) => ({ id: s.id, name: s.name, position: s.position })) as StationPoint[];
+      // 経路時は駅名で一意化（同名は先勝ち）。
+      // 駅名が無い場合のみ座標丸めでキー化。
+      const byName = new Map<string, { id?: string; name?: string; position: [number, number] }>();
+      const byCoord = new Map<string, { id?: string; name?: string; position: [number, number] }>();
+      for (const s of routeStations) {
+        const keyName = (s.name ?? '').trim();
+        if (keyName !== '') {
+          if (!byName.has(keyName)) byName.set(keyName, { id: s.id, name: s.name, position: s.position });
+          continue;
+        }
+        const rounded = `${Math.round(s.position[0] * 1e5) / 1e5},${Math.round(s.position[1] * 1e5) / 1e5}`;
+        if (!byCoord.has(rounded)) byCoord.set(rounded, { id: s.id, name: s.name, position: s.position });
+      }
+      return [...byName.values(), ...byCoord.values()] as StationPoint[];
     }
 
     // 経路がない場合は駅名で重複排除した集合を使用

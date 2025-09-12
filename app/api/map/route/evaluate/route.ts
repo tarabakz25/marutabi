@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findRoute, type RouteResult } from '@/lib/route';
-import { computeCompositeScore, type RouteEvaluationInput } from '@/lib/scoring';
+import { type RouteEvaluationInput } from '@/lib/scoring';
 import { evaluateRouteWithLLM } from '@/lib/llmEvaluate';
+import { getCourse, getStationCode } from '@/lib/ekispert';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,46 @@ export async function POST(req: NextRequest) {
     }
 
     const evalInput = toEvaluationInput(route);
-    const composite = computeCompositeScore(evalInput);
+
+    // Try to compute accurate metrics via Ekispert per leg when possible
+    async function computeAccurateMetrics(r: RouteResult): Promise<{ totalFare: number; totalTimeMinutes: number; totalDistance: number } | null> {
+      try {
+        const features = r.geojson.features ?? [];
+        const seqPairs = new Map<number, { from: string; to: string }>();
+        for (const f of features) {
+          const seq = Number((f.properties as any)?.seq ?? -1);
+          const from = String((f.properties as any)?.from ?? '');
+          const to = String((f.properties as any)?.to ?? '');
+          if (seq >= 0 && from && to && !seqPairs.has(seq)) {
+            seqPairs.set(seq, { from, to });
+          }
+        }
+        if (seqPairs.size === 0) return null;
+        const stationMap = new Map(r.routeStations.map((s) => [s.id, s.name ?? ''] as const));
+        let fareSum = 0;
+        let timeSum = 0;
+        let distSum = 0;
+        const sortedSeqs = Array.from(seqPairs.keys()).sort((a, b) => a - b);
+        for (const seq of sortedSeqs) {
+          const pair = seqPairs.get(seq)!;
+          const nameFrom = stationMap.get(pair.from) ?? '';
+          const nameTo = stationMap.get(pair.to) ?? '';
+          if (!nameFrom || !nameTo) return null;
+          const codeFrom = await getStationCode(nameFrom);
+          const codeTo = await getStationCode(nameTo);
+          if (!codeFrom || !codeTo) return null;
+          const info = await getCourse(codeFrom, codeTo, 'optimal', []);
+          fareSum += info.fare;
+          timeSum += info.time;
+          distSum += info.distance * 1000; // km -> m
+        }
+        return { totalFare: fareSum, totalTimeMinutes: timeSum, totalDistance: distSum };
+      } catch {
+        return null;
+      }
+    }
+
+    const accurate = await computeAccurateMetrics(route);
 
     let llm: any = null;
     try {
@@ -54,23 +94,29 @@ export async function POST(req: NextRequest) {
         llm = await evaluateRouteWithLLM({ ...evalInput, locale: 'ja', style: 'concise' });
         (llm as any).source = 'openai';
       } else {
-        // Fallback minimal comment without LLM
         llm = {
-          score: composite.score,
           reasons: [
-            `時間(${Math.round(evalInput.totalTimeMinutes)}分)`,
-            `運賃(${Math.round(evalInput.totalFare)}円)`,
+            `時間(${Math.round(accurate?.totalTimeMinutes ?? evalInput.totalTimeMinutes)}分)`,
+            `運賃(${Math.round(accurate?.totalFare ?? evalInput.totalFare)}円)`,
             `乗換(${evalInput.transferCount}回)`
           ],
-          comment: `LLM未設定のため簡易評価。総合スコアは${composite.score}です。`,
+          comment: `LLM未設定のため簡易評価。時間と料金を表示します。`,
           source: 'fallback'
-        };
+        } as any;
       }
     } catch (e) {
-      llm = { score: composite.score, reasons: ['評価でエラーが発生しました'], comment: `総合スコアは${composite.score}です。`, source: 'error', errorMessage: e instanceof Error ? e.message : String(e) };
+      llm = { reasons: ['評価でエラーが発生しました'], comment: '評価に失敗しました', source: 'error', errorMessage: e instanceof Error ? e.message : String(e) };
     }
 
-    return NextResponse.json({ composite, llm }, { headers: { 'content-type': 'application/json; charset=utf-8' } });
+    return NextResponse.json({
+      metrics: {
+        totalTimeMinutes: accurate?.totalTimeMinutes ?? evalInput.totalTimeMinutes,
+        totalFare: accurate?.totalFare ?? evalInput.totalFare,
+        transferCount: evalInput.transferCount,
+        totalDistance: accurate?.totalDistance ?? evalInput.totalDistance,
+      },
+      llm,
+    }, { headers: { 'content-type': 'application/json; charset=utf-8' } });
   } catch (e) {
     console.error('Failed to evaluate route:', e);
     return NextResponse.json({ error: 'Failed to evaluate route' }, { status: 500 });

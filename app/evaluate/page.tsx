@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { RouteTimeline } from '@/components/Sidebar';
+import type { RouteResult } from '@/lib/route';
+// Header はサーバーコンポーネントのため、このページ（クライアント）は直接読み込まない
 
 type EvalResponse = {
-  composite?: { score: number; breakdown: { timeScore: number; fareScore: number; transferScore: number; distanceScore: number } };
-  llm?: { score?: number; reasons?: string[]; risks?: string[]; comment?: string } | { error: string };
+  metrics: {
+    totalTimeMinutes: number;
+    totalFare: number;
+    transferCount: number;
+    totalDistance: number;
+  };
+  llm?: { reasons?: string[]; risks?: string[]; comment?: string } | { error: string };
 };
 
 export default function EvaluatePage() {
@@ -20,6 +28,7 @@ export default function EvaluatePage() {
   const [qrUrl, setQrUrl] = useState('');
   const [userComment, setUserComment] = useState('');
   const [comments, setComments] = useState<string[]>([]);
+  const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
 
   useEffect(() => {
     try {
@@ -31,6 +40,7 @@ export default function EvaluatePage() {
       }
       setImageUrl(img);
       const route = JSON.parse(raw);
+      setRouteResult(route as RouteResult);
       const run = async () => {
         setLoading(true);
         setError(null);
@@ -88,139 +98,136 @@ export default function EvaluatePage() {
     setUserComment('');
   };
 
-  const compositeScore = result?.composite?.score ?? 0;
-  const gaugeAngle = useMemo(() => Math.min(360, Math.max(0, Math.round((compositeScore / 100) * 360))), [compositeScore]);
+  const fmtFare = (yen: number) => new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 }).format(Math.round(yen));
+  const fmtTime = (minutes: number) => {
+    const m = Math.max(0, Math.round(minutes));
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    if (h > 0) return `${h}時間${r}分`;
+    return `${r}分`;
+  };
 
   return (
-    <main className="min-h-screen w-full px-4 py-6">
-      <div className="max-w-4xl mx-auto space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold">ルート評価</h1>
-          <div className="flex items-center gap-2">
-            <Button onClick={openShare}>友達にシェア</Button>
-            <Button variant="outline" onClick={() => router.back()}>戻る</Button>
-          </div>
-        </div>
-
-        {imageUrl && (
-          <div className="w-full flex items-center justify-center">
-            <img src={imageUrl} alt="route" className="max-w-full max-h-[50vh] rounded border" />
-          </div>
-        )}
-
-        {loading && (
-          <div className="text-sm text-slate-600">評価中...</div>
-        )}
-        {error && (
-          <div className="text-sm text-red-600">{error}</div>
-        )}
-
-        {!loading && !error && result && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="rounded border bg-white p-4 flex flex-col items-center justify-center">
-                <div className="text-sm text-slate-600 mb-2">合成スコア</div>
-                <div className="relative" style={{ width: 160, height: 160 }}>
-                  <svg viewBox="0 0 120 120" width={160} height={160}>
-                    <circle cx="60" cy="60" r="54" fill="none" stroke="#E5E7EB" strokeWidth="12" />
-                    <g transform="rotate(-90 60 60)">
-                      <circle cx="60" cy="60" r="54" fill="none" stroke="#22C55E" strokeWidth="12" strokeLinecap="round"
-                        strokeDasharray={`${Math.max(1, Math.round((gaugeAngle/360)*2*Math.PI*54))} ${Math.round(2*Math.PI*54)}`} />
-                    </g>
-                    <text x="60" y="66" textAnchor="middle" fontSize="28" fontWeight="700" fill="#111827">{compositeScore}</text>
-                  </svg>
-                </div>
-              </div>
-              <div className="md:col-span-2 rounded border bg-white p-4">
-                <div className="text-sm text-slate-600 mb-3">内訳</div>
-                <div className="space-y-2">
-                  <Bar name="時間" value={result.composite!.breakdown.timeScore} color="#3B82F6" />
-                  <Bar name="運賃" value={result.composite!.breakdown.fareScore} color="#22C55E" />
-                  <Bar name="乗換" value={result.composite!.breakdown.transferScore} color="#F97316" />
-                  <Bar name="距離" value={result.composite!.breakdown.distanceScore} color="#A855F7" />
-                </div>
-              </div>
+    <div>
+      <main className="min-h-screen w-full px-4 py-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-4 lg:col-span-2">
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="text-xl font-semibold">ルート評価</h1>
+            <div className="flex items-center gap-2">
+              <Button onClick={openShare}>友達にシェア</Button>
+              <Button variant="outline" onClick={() => router.back()}>戻る</Button>
             </div>
+          </div>
 
-            {result.llm && !(result.llm as any).error && (
-              <div className="rounded border bg-white p-4 space-y-2">
-                <div className="text-sm font-semibold">AI コメント</div>
-                {(result.llm as any).comment && (
-                  <div className="text-sm text-slate-700">{(result.llm as any).comment}</div>
-                )}
-                {Array.isArray((result.llm as any).reasons) && ((result.llm as any).reasons.length > 0) && (
-                  <ul className="list-disc pl-5 text-sm">
-                    {((result.llm as any).reasons ?? []).map((r: string, idx: number) => (
-                      <li key={idx}>{r}</li>
-                    ))}
-                  </ul>
-                )}
-                {(result.llm as any).source && (
-                  <div className="text-[11px] text-slate-500">source: {(result.llm as any).source}</div>
-                )}
-                {(result.llm as any).errorMessage && (
-                  <div className="text-[11px] text-red-500">{(result.llm as any).errorMessage}</div>
-                )}
-              </div>
-            )}
+          {imageUrl && (
+            <div className="w-full flex items-center justify-center">
+              <img src={imageUrl} alt="route" className="max-w-full max-h-[50vh] rounded border" />
+            </div>
+          )}
 
-            <div className="rounded border bg-white p-4 space-y-3">
-              <div className="text-sm font-semibold">あなたの評価コメント</div>
-              <textarea
-                value={userComment}
-                onChange={(e) => setUserComment(e.target.value)}
-                placeholder="このルートについて感じたこと、良かった点/気になった点を教えてください"
-                className="w-full border rounded px-3 py-2 text-sm min-h-24"
-              />
-              <div className="flex justify-end">
-                <Button onClick={addUserComment}>コメントを追加</Button>
+          {loading && (
+            <div className="text-sm text-slate-600">評価中...</div>
+          )}
+          {error && (
+            <div className="text-sm text-red-600">{error}</div>
+          )}
+
+          {!loading && !error && result && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded border bg-white p-4 flex flex-col items-center justify-center">
+                  <div className="text-sm text-slate-600 mb-1">所要時間</div>
+                  <div className="text-3xl font-bold">{fmtTime(result.metrics.totalTimeMinutes)}</div>
+                </div>
+                <div className="rounded border bg-white p-4 flex flex-col items-center justify-center">
+                  <div className="text-sm text-slate-600 mb-1">合計料金</div>
+                  <div className="text-3xl font-bold">{fmtFare(result.metrics.totalFare)}</div>
+                </div>
               </div>
-              {comments.length > 0 && (
-                <div className="space-y-2">
-                  {comments.map((c, i) => (
-                    <div key={i} className="text-sm p-2 border rounded bg-slate-50">{c}</div>
-                  ))}
+
+              {result.llm && !(result.llm as any).error && (
+                <div className="rounded border bg-white p-4 space-y-2">
+                  <div className="text-sm font-semibold">AI コメント</div>
+                  {(result.llm as any).comment && (
+                    <div className="text-sm text-slate-700">{(result.llm as any).comment}</div>
+                  )}
+                  {Array.isArray((result.llm as any).reasons) && ((result.llm as any).reasons.length > 0) && (
+                    <ul className="list-disc pl-5 text-sm">
+                      {((result.llm as any).reasons ?? []).map((r: string, idx: number) => (
+                        <li key={idx}>{r}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {(result.llm as any).source && (
+                    <div className="text-[11px] text-slate-500">source: {(result.llm as any).source}</div>
+                  )}
+                  {(result.llm as any).errorMessage && (
+                    <div className="text-[11px] text-red-500">{(result.llm as any).errorMessage}</div>
+                  )}
                 </div>
               )}
+
+              <div className="rounded border bg-white p-4 space-y-3">
+                <div className="text-sm font-semibold">あなたの評価コメント</div>
+                <textarea
+                  value={userComment}
+                  onChange={(e) => setUserComment(e.target.value)}
+                  placeholder="このルートについて感じたこと、良かった点/気になった点を教えてください"
+                  className="w-full border rounded px-3 py-2 text-sm min-h-24"
+                />
+                <div className="flex justify-end">
+                  <Button onClick={addUserComment}>コメントを追加</Button>
+                </div>
+                {comments.length > 0 && (
+                  <div className="space-y-2">
+                    {comments.map((c, i) => (
+                      <div key={i} className="text-sm p-2 border rounded bg-slate-50">{c}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+            </div>
+            {routeResult && (
+              <aside className="hidden lg:block lg:col-span-1 p-0 overflow-y-auto">
+                <div className="space-y-2">
+                  <h2 className="text-base font-semibold">検索結果</h2>
+                  {routeResult.summary?.passes && routeResult.summary.passes.length > 0 && (
+                    <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs">
+                      <div className="font-semibold text-amber-900">使用する切符</div>
+                      <div className="mt-1 text-amber-900">{routeResult.summary.passes.join('、 ')}</div>
+                    </div>
+                  )}
+                  <RouteTimeline selection={{ origin: routeResult.routeStations[0], destination: routeResult.routeStations[routeResult.routeStations.length - 1], vias: [] } as any} routeResult={routeResult} />
+                </div>
+              </aside>
+            )}
+          </div>
+        </div>
+        {shareOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShareOpen(false)} />
+            <div className="relative z-10 bg-white rounded-lg shadow-xl w-[90%] max-w-sm p-4 space-y-3">
+              <div className="text-base font-semibold text-center">シェア</div>
+              <div className="text-xs break-words p-2 rounded bg-slate-50 border">{shareUrl || 'URLを生成中...'}</div>
+              {qrUrl ? (
+                <div className="flex items-center justify-center">
+                  <img src={qrUrl} alt="QR" className="w-40 h-40" />
+                </div>
+              ) : (
+                <div className="text-center text-xs text-slate-500">QRコードを生成中...</div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button className="w-full sm:flex-1" onClick={copyShareUrl}>URLをコピー</Button>
+                <Button variant="outline" className="w-full sm:flex-1" onClick={() => setShareOpen(false)}>閉じる</Button>
+              </div>
             </div>
           </div>
         )}
-      </div>
-      {shareOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShareOpen(false)} />
-          <div className="relative z-10 bg-white rounded-lg shadow-xl w-[90%] max-w-sm p-4 space-y-3">
-            <div className="text-base font-semibold text-center">シェア</div>
-            <div className="text-xs break-words p-2 rounded bg-slate-50 border">{shareUrl || 'URLを生成中...'}</div>
-            {qrUrl ? (
-              <div className="flex items-center justify-center">
-                <img src={qrUrl} alt="QR" className="w-40 h-40" />
-              </div>
-            ) : (
-              <div className="text-center text-xs text-slate-500">QRコードを生成中...</div>
-            )}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button className="w-full sm:flex-1" onClick={copyShareUrl}>URLをコピー</Button>
-              <Button variant="outline" className="w-full sm:flex-1" onClick={() => setShareOpen(false)}>閉じる</Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </main>
-  );
-}
-
-function Bar({ name, value, color }: { name: string; value: number; color: string }) {
-  const v = Math.max(0, Math.min(100, Math.round(value)));
-  return (
-    <div className="w-full">
-      <div className="flex items-center justify-between text-xs mb-1">
-        <span>{name}</span>
-        <span>{v}</span>
-      </div>
-      <div className="w-full h-3 bg-slate-100 rounded">
-        <div className="h-3 rounded" style={{ width: `${v}%`, backgroundColor: color }} />
-      </div>
+      </main>
     </div>
   );
 }
