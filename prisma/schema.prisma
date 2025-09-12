@@ -1,0 +1,83 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+model Account {
+  id String @id @default(uuid())
+  userId String @unique
+  type String
+  provider String
+  providerAccountId String
+  refreshToken String? @db.Text
+  accessToken String? @db.Text
+  expiresAt Int?
+  tokenType String?
+  scope String?
+  idToken String?
+  sessionState String?
+  user User @relation(fields: [userId], references: [id])
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@index([provider, providerAccountId])
+}
+
+model Session {
+  id String @id @default(cuid())
+  sessionToken String @unique
+  userId String
+  expires DateTime
+  user User @relation(fields: [userId], references: [id])
+  @@index([sessionToken])
+  @@index([userId])
+}
+
+model User {
+  id String @id @default(cuid())
+  name String?
+  email String?
+  emailVerified DateTime?
+  image String?
+  accounts Account[]
+  sessions Session[]
+  profile Profile?
+  @@index([email])
+  @@unique([email])
+}
+
+model VerificationToken {
+  identifier String
+  token String
+  expires DateTime
+  @@unique([identifier, token])
+}
+
+model Profile {
+  id String @id @default(cuid())
+  userId String @unique
+  name String?
+  email String?
+  image String?
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId])
+}
+
+model Trip {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  note      String?
+  // 駅IDなどの選択情報（出発・到着・経由・優先度・切符IDなど）
+  selection Json
+  // 計算済みのルート結果（lib/route.ts の RouteResult をJSONで保存）
+  route     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
