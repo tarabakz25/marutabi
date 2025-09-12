@@ -1,15 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Map } from "@/components/Map";
 import type { SelectedStations, StationSelection, SelectionMode } from "./types";
 import type { RouteResult } from "@/lib/route";
-type StationSearchResult = { id: string; name: string; position: [number, number] };
+type StationSearchResult = {
+  id: string;
+  name: string;
+  position: [number, number];
+  type?: "origin" | "destination" | "via";
+  index?: number;
+};
 
 export default function MapWithSidebar() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<SelectionMode>("origin");
   const [selection, setSelection] = useState<SelectedStations>({
     origin: undefined,
@@ -54,12 +61,49 @@ export default function MapWithSidebar() {
   const [error, setError] = useState<string | null>(null);
   const [searchToken, setSearchToken] = useState<number>(0);
   const passIdsRef = useRef<string[] | null>(null);
+  const [savedTripTitle, setSavedTripTitle] = useState<string>('');
+  const [shouldResetView, setShouldResetView] = useState<number>(0);
 
   const handleSearch = () => {
     // selection should contain at least origin & destination
     if (!selection.origin || !selection.destination) return;
     setSearchToken(Date.now());
   };
+
+  useEffect(() => {
+    // tripId がある場合、保存済みをロードしてそのまま表示
+    const tripId = searchParams?.get('tripId');
+    if (!tripId) return;
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const trip = data?.trip;
+        if (!trip || aborted) return;
+        setSavedTripTitle(String(trip.title ?? ''));
+        const sel = trip.selection ?? {};
+        const route = trip.route;
+        // selection を反映
+        setSelection({
+          origin: sel.origin ?? undefined,
+          destination: sel.destination ?? undefined,
+          vias: Array.isArray(sel.vias) ? sel.vias : [],
+        });
+        if (Array.isArray(sel.passIds)) passIdsRef.current = sel.passIds;
+        // ルートを反映
+        if (route?.geojson) {
+          setRouteGeojson(route.geojson);
+          setRouteResult(route);
+        }
+        // 最初の駅へ移動
+        const p = sel.origin?.position ?? route?.routeStations?.[0]?.position ?? null;
+        if (p) setFlyTo(p as [number, number]);
+      } catch {}
+    })();
+    return () => { aborted = true; };
+  }, [searchParams]);
 
   useEffect(() => {
     // Sidebar からの passIds 受信
@@ -126,6 +170,24 @@ export default function MapWithSidebar() {
 
   const handleStationSelectedFromSearch = (res: StationSearchResult) => {
     const station: StationSelection = { id: res.id, name: res.name, position: res.position };
+
+    // 経由駅の「変更」時は該当インデックスを置き換える
+    if (res.type === "via" && typeof res.index === "number") {
+      setSelection((prev) => {
+        const targetIndex = Math.max(0, Math.min(res.index as number, Math.max(prev.vias.length - 1, 0)));
+        const nextVias = [...prev.vias];
+        if (targetIndex < nextVias.length) {
+          nextVias[targetIndex] = station;
+        } else {
+          nextVias.push(station);
+        }
+        return { ...prev, vias: nextVias };
+      });
+      setFlyTo(station.position);
+      return;
+    }
+
+    // 出発/到着、または新規経由は通常フロー
     handleStationClick(station);
   };
 
@@ -171,6 +233,15 @@ export default function MapWithSidebar() {
     }
   };
 
+  // 検索結果から戻るときに駅表示とズームを初期化し固定
+  const handleBackFromResults = () => {
+    // ルート結果をクリアし、駅レイヤを通常表示に戻す
+    setRouteGeojson({ type: "FeatureCollection", features: [] });
+    setRouteResult(null);
+    // ビューのリセットトリガー
+    setShouldResetView(Date.now());
+  };
+
   return (
     <div className="w-full h-[calc(100dvh-5rem)] relative">
       <Sidebar
@@ -183,9 +254,20 @@ export default function MapWithSidebar() {
         routeResult={routeResult}
         onStationSelected={handleStationSelectedFromSearch}
         onEvaluateNavigate={handleEvaluateNavigate}
+        savedTitle={savedTripTitle}
+        onBackFromResults={handleBackFromResults}
       />
       <div className="absolute inset-0" ref={containerRef}>
-        <Map onStationClick={handleStationClick} selected={selection} routeGeojson={routeGeojson} routeOperators={routeResult?.summary.operators} routeStations={routeResult?.routeStations} flyTo={flyTo} onLoadComplete={() => setMapLoaded(true)} />
+        <Map 
+          onStationClick={handleStationClick} 
+          selected={selection} 
+          routeGeojson={routeGeojson} 
+          routeOperators={routeResult?.summary.operators} 
+          routeStations={routeResult?.routeStations} 
+          flyTo={flyTo} 
+          onLoadComplete={() => setMapLoaded(true)}
+          shouldResetView={shouldResetView}
+        />
         {error && (
           <div className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 text-xs shadow">{error}</div>
         )}

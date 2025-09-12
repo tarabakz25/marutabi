@@ -68,9 +68,10 @@ type Props = {
   routeStations?: { id: string; name?: string; position: [number, number] }[];
   flyTo?: [number, number] | null;
   onLoadComplete?: () => void;
+  shouldResetView?: number;
 };
 
-export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, routeStations, flyTo, onLoadComplete }: Props) {
+export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, routeStations, flyTo, onLoadComplete, shouldResetView }: Props) {
   const [railGeojson, setRailGeojson] = useState<any | null>(null);
   const [stationGeojson, setStationGeojson] = useState<any | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -154,6 +155,12 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
       setViewState((prev) => ({ ...prev, longitude: flyTo[0], latitude: flyTo[1] }));
     }
   }, [flyTo]);
+
+  // 外部トリガーで初期ビューにリセットし、ズームを固定
+  useEffect(() => {
+    if (!shouldResetView) return;
+    setViewState((prev) => ({ ...INITIAL_VIEW_STATE, longitude: prev.longitude ?? INITIAL_VIEW_STATE.longitude, latitude: prev.latitude ?? INITIAL_VIEW_STATE.latitude }));
+  }, [shouldResetView]);
 
   // container size tracking for fitBounds
   useEffect(() => {
