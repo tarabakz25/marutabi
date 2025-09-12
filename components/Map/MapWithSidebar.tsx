@@ -268,6 +268,15 @@ export default function MapWithSidebar() {
           onLoadComplete={() => setMapLoaded(true)}
           shouldResetView={shouldResetView}
         />
+        {routeResult?.summary?.passes && routeResult.summary.passes.length > 0 && (
+          <div className="absolute left-1/2 -translate-x-1/2 top-4 z-40 flex flex-wrap gap-2 max-w-[80vw] justify-center">
+            {routeResult.summary.passes.map((p) => (
+              <span key={p} className="text-xs px-2 py-1 rounded-full bg-amber-100 border border-amber-200 text-amber-900 shadow-sm whitespace-nowrap">
+                {p}
+              </span>
+            ))}
+          </div>
+        )}
         {error && (
           <div className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 text-xs shadow">{error}</div>
         )}

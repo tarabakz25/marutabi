@@ -7,7 +7,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <div className="w-2/3">
-        <Image className="w-full h-full object-cover" src="https://images.pexels.com/photos/2265876/pexels-photo-2265876.jpeg" alt="Marutabi" width={1000} height={1000} />
+        <Image className="w-full h-full object-cover" src="space-4888643_1280.webp" alt="Marutabi" width={1000} height={1000} />
       </div>
 
       <div className="w-1/3 bg-white flex items-center justify-center p-8 h-screen">

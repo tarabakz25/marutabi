@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { buildAllowEdgePredicate, getPassNames as getPassNamesFromCatalog, suggestPassesForOperators } from '@/lib/passes';
 // import { MinHeap } from 'heap-js';  // Removed to use local implementation
 
 // 簡易最小ヒープ — 開発時のホットリロードで再評価されても重複定義しないよう global キャッシュ
@@ -543,8 +544,8 @@ export async function findRoute({
   }
   // ---- パス候補 ----
   const passes = passIds.length > 0
-    ? await getPassNames(passIds)
-    : await suggestPasses(Array.from(overallOperators));
+    ? await getPassNamesFromCatalog(passIds)
+    : await suggestPassesForOperators(Array.from(overallOperators));
   // Build routeStations from transfers + endpoints + dedup across features path nodes
   const routeStationsSet = new Map<string, { id: string; name?: string; position: [number, number] }>();
   // endpoints from arguments
@@ -589,145 +590,10 @@ function timeFromDistance(m: number): number {
 }
 
 // 簡易パス候補選定: 全 operators をカバーするパスを返す
-async function suggestPasses(operators: string[]): Promise<string[]> {
-  try {
-    const passPath = path.join(process.cwd(), 'data', 'pass', 'free_passes.geojson');
-    const json = JSON.parse(await fs.readFile(passPath, 'utf-8')) as any;
-    const result: string[] = [];
-    for (const f of json.features ?? []) {
-      const include = f.properties?.rules?.include as any[] | undefined;
-      if (!include) continue;
-      const incOps = include.map((i) => i.operator).filter(Boolean) as string[];
-      const coversAll = operators.every((op) => incOps.includes(op) || isOperatorCoveredByJRWildcard(op, incOps));
-      if (coversAll) result.push(f.properties?.name ?? f.properties?.id);
-    }
-    return result.slice(0, 10);
-  } catch {
-    return [];
-  }
-}
+// removed in favor of suggestPassesForOperators from lib/passes
 
 // ---- 切符ルール適用 ----
-type PassCatalog = { id: string; name: string; rules?: any }[];
-let cachedPassCatalog: PassCatalog | null = null;
-async function loadPassCatalog(): Promise<PassCatalog> {
-  if (cachedPassCatalog) return cachedPassCatalog as PassCatalog;
-  try {
-    const passPath = path.join(process.cwd(), 'data', 'pass', 'free_passes.geojson');
-    const json = JSON.parse(await fs.readFile(passPath, 'utf-8')) as any;
-    const arr: PassCatalog = (json.features ?? []).map((f: any) => ({ id: f.properties?.id, name: f.properties?.name ?? f.properties?.id, rules: f.properties?.rules }));
-    cachedPassCatalog = arr;
-    return arr;
-  } catch {
-    const arr: PassCatalog = [];
-    cachedPassCatalog = arr;
-    return arr;
-  }
-}
-
-async function getPassNames(passIds: string[]): Promise<string[]> {
-  const catalog = await loadPassCatalog();
-  const map = new Map(catalog.map((p) => [p.id, p.name] as const));
-  return passIds.map((id) => map.get(id) ?? id);
-}
-
-function isJRLikeOperator(opJa: string): boolean {
-  return opJa.includes('ＪＲ') || opJa.includes('JR');
-}
-
-function isOperatorCoveredByJRWildcard(opJa: string, incOps: string[]): boolean {
-  // include に 'JR' が含まれていれば JR 系の事業者全体をカバーとみなす
-  if (incOps.includes('JR')) return isJRLikeOperator(opJa);
-  return false;
-}
-
-const OPERATOR_MAP: Record<string, (opJa: string) => boolean> = {
-  'JR': (s) => isJRLikeOperator(s),
-  'JR Hokkaido': (s) => s.includes('ＪＲ北海道') || s.includes('JR北海道'),
-  'JR East': (s) => s.includes('ＪＲ東日本') || s.includes('JR東日本'),
-  'JR Central': (s) => s.includes('ＪＲ東海') || s.includes('JR東海'),
-  'JR West': (s) => s.includes('ＪＲ西日本') || s.includes('JR西日本'),
-  'JR Shikoku': (s) => s.includes('ＪＲ四国') || s.includes('JR四国'),
-  'JR Kyushu': (s) => s.includes('ＪＲ九州') || s.includes('JR九州'),
-  'Aoimori Railway': (s) => s.includes('青い森鉄道'),
-  'IGR Iwate Galaxy Railway': (s) => s.includes('IGR') || s.includes('いわて銀河鉄道') || s.includes('ＩＧＲ'),
-  'Hokuetsu Express': (s) => s.includes('北越急行'),
-  'Tokyo Monorail': (s) => s.includes('東京モノレール'),
-  'TWR Rinkai Line': (s) => s.includes('東京臨海高速鉄道') || s.includes('りんかい線'),
-  'Meitetsu': (s) => s.includes('名古屋鉄道'),
-  'Kintetsu': (s) => s.includes('近畿日本鉄道'),
-  'Nankai': (s) => s.includes('南海電気鉄道') || s.includes('南海'),
-  'Shizutetsu': (s) => s.includes('静岡鉄道'),
-  'Enshu Railway': (s) => s.includes('遠州鉄道'),
-  'Aichi Loop Railway': (s) => s.includes('愛知環状鉄道'),
-  'Yoro Railway': (s) => s.includes('養老鉄道'),
-  'Izu Kyuko': (s) => s.includes('伊豆急行'),
-  'Izuhakone Railway': (s) => s.includes('伊豆箱根鉄道'),
-  'Sangi Railway': (s) => s.includes('三岐鉄道'),
-  'Nagaragawa Railway': (s) => s.includes('長良川鉄道'),
-  'Akechi Railway': (s) => s.includes('明知鉄道'),
-  'Tenryu Hamanako Railroad': (s) => s.includes('天竜浜名湖鉄道'),
-  'Ise Railway': (s) => s.includes('伊勢鉄道'),
-  'Yokkaichi Asunarou Railway': (s) => s.includes('四日市あすなろう鉄道'),
-  'Toyohashi Railroad': (s) => s.includes('豊橋鉄道'),
-  'Minatomirai Line': (s) => s.includes('横浜高速鉄道') || s.includes('みなとみらい'),
-};
-
-function matchOperatorByRule(opJa: string, ruleOperator?: string): boolean {
-  if (!ruleOperator) return true;
-  const fn = OPERATOR_MAP[ruleOperator];
-  if (fn) return fn(opJa);
-  // Fallback: substring (英字が含まれている場合など)
-  return opJa.toLowerCase().includes(ruleOperator.toLowerCase());
-}
-
-function isShinkansenLine(lineName?: string): boolean {
-  const s = lineName ?? '';
-  return s.includes('新幹線');
-}
-
 async function buildAllowEdge(passIds: string[]): Promise<(e: Edge) => boolean> {
-  // Transfer は常に許可（駅構内の移動）
-  const base = (e: Edge) => e.operator === 'Transfer' ? true : !isShinkansenLine(e.line);
-
-  if (!passIds || passIds.length === 0) return base;
-
-  const catalog = await loadPassCatalog();
-  const selected = catalog.filter((p) => passIds.includes(p.id));
-  if (selected.length === 0) return base;
-
-  type SinglePredicate = (e: Edge) => boolean;
-  const makeSingle = (rules: any): SinglePredicate => {
-    const includeArr: any[] = Array.isArray(rules?.include) ? rules.include : [];
-    const excludeArr: any[] = Array.isArray(rules?.exclude) ? rules.exclude : [];
-
-    // include: オペレータのいずれかに一致すれば可
-    const includeOps = includeArr.map((x) => x?.operator).filter(Boolean) as string[];
-    const includesShinkansen = includeArr.some((x) => (x?.service ?? []).includes?.('Shinkansen'));
-    const excludeShinkansen = excludeArr.some((x) => (x?.service ?? []).includes?.('Shinkansen'));
-
-    return (e: Edge) => {
-      if (e.operator === 'Transfer') return true;
-      const line = e.line ?? '';
-      // 新幹線の扱い
-      if (isShinkansenLine(line)) {
-        if (excludeShinkansen) return false;
-        if (!includesShinkansen) return false;
-      }
-      // include が無い場合は事業者で制限できないため base に委譲
-      if (includeOps.length === 0) return base(e);
-      // JR ワイルドカード
-      if (includeOps.includes('JR') && isJRLikeOperator(e.operator)) return true;
-      // 明示オペレータ
-      for (const op of includeOps) {
-        if (matchOperatorByRule(e.operator, op)) return true;
-      }
-      return false;
-    };
-  };
-
-  const predicates = selected.map((p) => makeSingle(p.rules));
-  // 複数切符が指定された場合は和集合
-  return (e: Edge) => predicates.some((f) => f(e));
+  return buildAllowEdgePredicate<Edge>(passIds);
 }
 

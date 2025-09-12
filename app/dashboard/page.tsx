@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   const sidebarItems = [
     {
       label: "Profile",
-      href: "/profile",
+      href: "/dashboard",
       icon: User,
     },
     {
