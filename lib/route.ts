@@ -32,8 +32,8 @@ class LocalMinHeap<T> {
   private bubbleDown(i: number) {
     const n = this.data.length;
     while (true) {
-      let l = i * 2 + 1;
-      let r = l + 1;
+      const l = i * 2 + 1;
+      const r = l + 1;
       let smallest = i;
       if (l < n && this.cmp(this.data[l], this.data[smallest]) < 0) smallest = l;
       if (r < n && this.cmp(this.data[r], this.data[smallest]) < 0) smallest = r;

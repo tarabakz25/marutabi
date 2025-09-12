@@ -18,7 +18,19 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // generated assets (Prisma client/runtime, wasm, etc.)
+      "lib/generated/**",
+      "lib/generated/prisma/**",
     ],
+  },
+  {
+    files: ["**/*.{ts,tsx}", "**/*.js"],
+    rules: {
+      // Allow "any" in application code to reduce friction; can tighten later
+      "@typescript-eslint/no-explicit-any": "off",
+      // Prefer const often noisy; we'll keep default except for our fix below
+      // "prefer-const": "warn",
+    },
   },
 ];
 

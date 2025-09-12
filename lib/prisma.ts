@@ -1,6 +1,7 @@
 import { PrismaClient } from "./generated/prisma";
 
 declare global {
+  // var を使うグローバル宣言は Next.js ドキュメントでも推奨されるため許容
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
