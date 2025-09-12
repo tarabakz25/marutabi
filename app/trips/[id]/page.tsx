@@ -1,4 +1,5 @@
 import Link from 'next/link';
+export const dynamic = 'force-dynamic';
 import { requireUser } from '@/lib/auth';
 import { getTripById } from '@/lib/trips';
 
@@ -36,15 +37,87 @@ export default async function TripDetailPage({ params }: Params) {
             <div className="text-sm">経由: {selection.vias.map((v: any) => v.name).join(' / ')}</div>
           )}
         </div>
-        <div className="rounded-lg border p-6 bg-white space-y-3">
-          <div className="text-base font-semibold">ルートの再評価</div>
-          <form action={`/evaluate`}>
-            {/* sessionStorage を使うためクライアントページからの遷移推奨。ここではリンク案内のみ */}
-            <div className="text-sm text-slate-600">/trips から選択後、地図で再検索して評価ページへ遷移してください。</div>
-          </form>
-        </div>
+        <RatingForm id={trip.id} />
       </div>
     </main>
+  );
+}
+
+function RatingForm({ id }: { id: string }) {
+  return (
+    <form action={`/api/ratings`} method="POST" className="rounded-lg border p-6 bg-white space-y-3">
+      <div className="text-base font-semibold">旅の評価を投稿</div>
+      <input type="hidden" name="tripId" value={id} />
+      {/* 星入力（簡易）*/}
+      <div className="flex items-center gap-2 text-sm">
+        <label className="w-24">星</label>
+        <select name="stars" className="border rounded px-2 py-1">
+          <option value="5">★★★★★</option>
+          <option value="4">★★★★☆</option>
+          <option value="3">★★★☆☆</option>
+          <option value="2">★★☆☆☆</option>
+          <option value="1">★☆☆☆☆</option>
+        </select>
+      </div>
+      <div className="flex items-start gap-2 text-sm">
+        <label className="w-24">コメント</label>
+        <textarea name="comment" rows={3} className="flex-1 border rounded px-2 py-1" placeholder="旅の感想など"></textarea>
+      </div>
+      <div className="flex items-center gap-3 text-sm">
+        <label className="w-24">公開設定</label>
+        <select name="isPublic" className="border rounded px-2 py-1">
+          <option value="true">公開（ブログに表示）</option>
+          <option value="false">非公開（自分だけ）</option>
+        </select>
+      </div>
+      <div className="pt-2">
+        <button formAction="/trips/[id]" className="hidden" />
+        {/* POST via fetch in client would be better; keep simple server action style via route handler */}
+        <SubmitViaFetch />
+      </div>
+    </form>
+  );
+}
+
+function SubmitViaFetch() {
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `
+      (function(){
+        var form = document.currentScript.parentElement.parentElement;
+        if(!form) return;
+        form.addEventListener('submit', function(ev){ ev.preventDefault(); });
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = '投稿する';
+        btn.className = 'inline-flex items-center px-3 py-2 rounded-md bg-slate-900 text-white text-sm';
+        btn.addEventListener('click', async function(){
+          var fd = new FormData(form);
+          var body = JSON.stringify({
+            tripId: fd.get('tripId'),
+            stars: Number(fd.get('stars')||0),
+            comment: String(fd.get('comment')||''),
+            isPublic: String(fd.get('isPublic')) === 'true'
+          });
+          try{
+            var res = await fetch('/api/ratings', { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+            if(!res.ok){
+              var e = await res.json().catch(function(){return {}});
+              alert(e.error || '投稿に失敗しました');
+              return;
+            }
+            alert('投稿しました');
+            location.reload();
+          }catch(e){
+            alert('投稿に失敗しました');
+          }
+        });
+        form.querySelector('.pt-2').appendChild(btn);
+      })();
+    `,
+      }}
+    />
   );
 }
 

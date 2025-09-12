@@ -7,23 +7,31 @@ import { Button } from "@/components/ui/button";
 export default function TripSharePage({ params }: { params: { id: string } }) {
   const [shareUrl, setShareUrl] = useState("");
   const [qrUrl, setQrUrl] = useState("");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const url = `${window.location.origin}/trips/${params.id}`;
-    setShareUrl(url);
-    const fetchQr = async () => {
+    // Ensure share exists and build public token URL
+    const ensureShare = async () => {
       try {
-        const res = await fetch(`/api/share?url=${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setQrUrl(data.qrUrl as string);
+        setCreating(true);
+        const res = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tripId: params.id }) });
+        if (!res.ok) return;
+        const data = await res.json();
+        const token = data?.share?.token as string | undefined;
+        if (!token) return;
+        const url = `${window.location.origin}/r/${token}`;
+        setShareUrl(url);
+        const qrRes = await fetch(`/api/share?url=${encodeURIComponent(url)}`);
+        if (qrRes.ok) {
+          const j = await qrRes.json();
+          setQrUrl(j.qrUrl as string);
         }
-      } catch (e) {
-        console.error(e);
+      } finally {
+        setCreating(false);
       }
     };
-    fetchQr();
+    ensureShare();
   }, [params.id]);
 
   const handleCopy = async () => {
@@ -36,7 +44,7 @@ export default function TripSharePage({ params }: { params: { id: string } }) {
     <div className="p-4 flex flex-col items-center gap-4">
       <div className="w-full max-w-md flex gap-2">
         <input className="flex-1 border p-2 rounded" value={shareUrl} readOnly />
-        <Button onClick={handleCopy}>コピー</Button>
+        <Button onClick={handleCopy} disabled={!shareUrl || creating}>{creating ? '生成中...' : 'コピー'}</Button>
       </div>
       {qrUrl && (
         <Image

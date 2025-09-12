@@ -5,31 +5,7 @@ import {
   SidebarHeader,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { User, Settings, FileText, Map } from "lucide-react";
 import Link from "next/link";
-
-const sidebarItems = [
-  {
-    label: "Profile",
-    href: "/dashboard",
-    icon: User,
-  },
-  {
-    label: "Trips",
-    href: "/trips",
-    icon: Map,
-  },
-  {
-    label: "Blogs",
-    href: "/blogs",
-    icon: FileText,
-  },
-  {
-    label: "Settings",
-    href: "/settings",
-    icon: Settings,
-  },
-];
 
 export default function DashboardSidebar({ items }: { items: { label: string; href: string; icon: React.ElementType }[] }) {
   return (

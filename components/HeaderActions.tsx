@@ -25,14 +25,27 @@ export default function HeaderActions() {
   const [loading, setLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Notifications (dummy)
-  const notifications = useMemo(
-    () => [
-      { id: "n1", title: "新しい公開旅", desc: "四国一周 3日が追加されました" },
-      { id: "n2", title: "ルート評価完了", desc: "先ほどの検索結果の評価が完了" },
-    ],
-    []
-  );
+  // Notifications from API
+  const [notifications, setNotifications] = useState<{ id: string; title: string; desc?: string }[]>([]);
+  useEffect(() => {
+    let mounted = true;
+    const fetcher = async () => {
+      try {
+        const res = await fetch('/api/notifications');
+        if (!res.ok) return;
+        const data: any[] = await res.json();
+        if (!mounted) return;
+        setNotifications(
+          data.map((n) => ({ id: n.id, title: n.title, desc: n.body ?? '' }))
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+    fetcher();
+    const t = setInterval(fetcher, 10_000);
+    return () => { mounted = false; clearInterval(t); };
+  }, []);
 
   const unreadCount = notifications.length;
   const displayCount = unreadCount > 9 ? "9+" : String(unreadCount);
