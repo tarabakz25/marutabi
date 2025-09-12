@@ -4,12 +4,12 @@ import { getTripById } from '@/lib/trips';
 
 export const dynamic = 'force-dynamic';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const { userId } = await requireUser();
-    const id = params?.id;
+    const { id } = await params;
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
     const trip = await getTripById(id, userId);
     if (!trip) return NextResponse.json({ error: 'not found' }, { status: 404 });
