@@ -23,7 +23,7 @@ export default async function Header() {
   return (
     <div className="w-full h-20 sticky top-0 z-50 bg-white border-b flex items-center justify-between px-6">
       <div className="flex-1">
-        <Link href='/' className="text-2xl font-bold">まるたび</Link>
+        <Link href='/marketing' className="text-2xl font-bold">まるたび</Link>
       </div>
       <div className="flex items-center gap-3">
         <HeaderActions />
@@ -48,10 +48,16 @@ export default async function Header() {
             >
               <DropdownMenuLabel>{userName}</DropdownMenuLabel>
               <DropdownMenuGroup>
-                <DropdownMenuItem>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Change theme</DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard">Profile</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">Settings</Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Logout</DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/logout">Logout</Link>
+                </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import MarketingPage from './(marketing)/page';
+import MarketingPage from './marketing/page';
 import { authOptions } from '@/lib/authOptions';
 
 export default async function Home() {

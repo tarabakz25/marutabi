@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { RouteTimeline } from '@/components/Sidebar';
 import type { RouteResult } from '@/lib/route';
+import DashboardSidebar from '@/components/DashboardSidebar';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 // Header はサーバーコンポーネントのため、このページ（クライアント）は直接読み込まない
 
 type EvalResponse = {
@@ -15,6 +17,7 @@ type EvalResponse = {
     totalDistance: number;
   };
   llm?: { reasons?: string[]; risks?: string[]; comment?: string } | { error: string };
+  schedule?: { time: string; title: string; description?: string }[];
 };
 
 export default function EvaluatePage() {
@@ -107,14 +110,26 @@ export default function EvaluatePage() {
     return `${r}分`;
   };
 
+  // Timeline 用の selection を安全に整形（JSX内のキャスト回避）
+  const timelineSelection = routeResult && routeResult.routeStations?.length >= 2
+    ? {
+        origin: routeResult.routeStations[0],
+        destination: routeResult.routeStations[routeResult.routeStations.length - 1],
+        vias: [],
+      }
+    : null;
+
   return (
     <div>
+      <SidebarProvider>
+        <DashboardSidebar />
+        <SidebarInset>
       <main className="min-h-screen w-full px-4 py-6">
         <div className="mx-auto max-w-6xl">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4 lg:col-span-2">
           <div className="flex items-center justify-between gap-2">
-            <h1 className="text-xl font-semibold">ルート評価</h1>
+            <h1 className="text-2xl font-semibold">ルート評価</h1>
             <div className="flex items-center gap-2">
               <Button onClick={openShare}>友達にシェア</Button>
               <Button variant="outline" onClick={() => router.back()}>戻る</Button>
@@ -169,25 +184,24 @@ export default function EvaluatePage() {
                 </div>
               )}
 
-              <div className="rounded border bg-white p-4 space-y-3">
-                <div className="text-sm font-semibold">あなたの評価コメント</div>
-                <textarea
-                  value={userComment}
-                  onChange={(e) => setUserComment(e.target.value)}
-                  placeholder="このルートについて感じたこと、良かった点/気になった点を教えてください"
-                  className="w-full border rounded px-3 py-2 text-sm min-h-24"
-                />
-                <div className="flex justify-end">
-                  <Button onClick={addUserComment}>コメントを追加</Button>
-                </div>
-                {comments.length > 0 && (
-                  <div className="space-y-2">
-                    {comments.map((c, i) => (
-                      <div key={i} className="text-sm p-2 border rounded bg-slate-50">{c}</div>
+              {Array.isArray(result.schedule) && result.schedule.length > 0 && (
+                <div className="rounded border bg-white p-4 space-y-2">
+                  <div className="text-sm font-semibold">おすすめタイムスケジュール</div>
+                  <ul className="divide-y">
+                    {result.schedule.map((it, idx) => (
+                      <li key={idx} className="py-2 flex items-start gap-3">
+                        <div className="text-sm font-mono min-w-12 text-slate-700">{it.time}</div>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-slate-900">{it.title}</div>
+                          {it.description && (
+                            <div className="text-xs text-slate-600">{it.description}</div>
+                          )}
+                        </div>
+                      </li>
                     ))}
-                  </div>
-                )}
-              </div>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
             </div>
@@ -201,7 +215,9 @@ export default function EvaluatePage() {
                       <div className="mt-1 text-amber-900">{routeResult.summary.passes.join('、 ')}</div>
                     </div>
                   )}
-                  <RouteTimeline selection={{ origin: routeResult.routeStations[0], destination: routeResult.routeStations[routeResult.routeStations.length - 1], vias: [] } as any} routeResult={routeResult} />
+                  {timelineSelection && (
+                    <RouteTimeline selection={timelineSelection as any} routeResult={routeResult} />
+                  )}
                 </div>
               </aside>
             )}
@@ -228,6 +244,8 @@ export default function EvaluatePage() {
           </div>
         )}
       </main>
+        </SidebarInset>
+      </SidebarProvider>
     </div>
   );
 }

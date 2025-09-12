@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Map } from "@/components/Map";
+import { Button } from "@/components/ui/button";
 import type { SelectedStations, StationSelection, SelectionMode } from "./types";
 import type { RouteResult } from "@/lib/route";
 type StationSearchResult = {
@@ -63,6 +64,9 @@ export default function MapWithSidebar() {
   const passIdsRef = useRef<string[] | null>(null);
   const [savedTripTitle, setSavedTripTitle] = useState<string>('');
   const [shouldResetView, setShouldResetView] = useState<number>(0);
+  const [saving, setSaving] = useState(false);
+  const [saveTitle, setSaveTitle] = useState<string>('');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSearch = () => {
     // selection should contain at least origin & destination
@@ -120,6 +124,11 @@ export default function MapWithSidebar() {
       }
     };
   }, []);
+
+  // Prefill save title when loading a saved trip
+  useEffect(() => {
+    if (savedTripTitle && !saveTitle) setSaveTitle(savedTripTitle);
+  }, [savedTripTitle, saveTitle]);
 
   useEffect(() => {
     const points: StationSelection[] = [];
@@ -213,9 +222,22 @@ export default function MapWithSidebar() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const takeScreenshot = (): string | null => {
     try {
-      const el = containerRef.current?.querySelector('canvas');
+      const el = containerRef.current?.querySelector('canvas') as HTMLCanvasElement | null;
       if (!el) return null;
-      const dataUrl = (el as HTMLCanvasElement).toDataURL('image/png');
+      // 画像サイズを抑えるために最大幅を 1200px に縮小しつつ JPEG で保存
+      const srcW = Math.max(1, el.width);
+      const srcH = Math.max(1, el.height);
+      const maxW = 1200;
+      const scale = Math.min(1, maxW / srcW);
+      const dstW = Math.max(1, Math.floor(srcW * scale));
+      const dstH = Math.max(1, Math.floor(srcH * scale));
+      const off = document.createElement('canvas');
+      off.width = dstW;
+      off.height = dstH;
+      const ctx = off.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(el, 0, 0, srcW, srcH, 0, 0, dstW, dstH);
+      const dataUrl = off.toDataURL('image/jpeg', 0.85);
       return dataUrl;
     } catch {
       return null;
@@ -268,6 +290,63 @@ export default function MapWithSidebar() {
           onLoadComplete={() => setMapLoaded(true)}
           shouldResetView={shouldResetView}
         />
+        {routeResult?.summary?.passes && routeResult.summary.passes.length > 0 && (
+          <div className="absolute left-1/2 -translate-x-1/2 top-4 z-40 flex flex-wrap gap-2 max-w-[80vw] justify-center">
+            {routeResult.summary.passes.map((p) => (
+              <span key={p} className="text-xs px-2 py-1 rounded-full bg-amber-100 border border-amber-200 text-amber-900 shadow-sm whitespace-nowrap">
+                {p}
+              </span>
+            ))}
+          </div>
+        )}
+        {routeResult && (
+          <div className="absolute right-4 top-4 z-40 w-[22rem] rounded-lg border bg-white p-3 text-sm space-y-2 shadow-lg">
+            <div className="font-semibold">このルートを保存</div>
+            <input
+              value={saveTitle}
+              onChange={(e) => setSaveTitle(e.target.value)}
+              placeholder="旅のタイトル（例：春の東北縦断2日）"
+              className="w-full px-3 py-2 border rounded text-sm"
+            />
+            {saveError && <div className="text-xs text-red-600">{saveError}</div>}
+            <div className="flex gap-2">
+              <Button
+                onClick={async () => {
+                  if (!routeResult) return;
+                  const title = saveTitle.trim();
+                  if (!title) { setSaveError('タイトルを入力してください'); return; }
+                  setSaveError(null);
+                  setSaving(true);
+                  try {
+                    const selectionPayload = {
+                      origin: selection.origin,
+                      destination: selection.destination,
+                      vias: selection.vias,
+                      priority: 'optimal',
+                      passIds: Array.isArray(passIdsRef.current) ? passIdsRef.current : [],
+                    } as any;
+                    const res = await fetch('/api/trips', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ title, selection: selectionPayload, route: routeResult }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    setSaveTitle('');
+                    router.push('/trips');
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    setSaveError(msg);
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={saving}
+              >{saving ? '保存中...' : '保存する'}</Button>
+              <Button variant="outline" onClick={() => setSaveTitle('')}>クリア</Button>
+            </div>
+            <div className="text-xs text-slate-600">保存済みのルートは /trips で確認できます</div>
+          </div>
+        )}
         {error && (
           <div className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 text-xs shadow">{error}</div>
         )}

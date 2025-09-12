@@ -464,6 +464,11 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,
+      // 画像読み込み時に CORS を有効化してキャンバス汚染を防ぐ
+      loadOptions: {
+        image: { crossOrigin: 'anonymous' },
+        fetch: { credentials: 'omit', mode: 'cors' }
+      },
       onTileError: (err) => {
         // eslint-disable-next-line no-console
         console.error('Tile load error', err);

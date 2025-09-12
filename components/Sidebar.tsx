@@ -654,53 +654,6 @@ export default function Sidebar({
             </div>
           )}
           <RouteTimeline selection={selection} routeResult={routeResult} />
-          {/* 保存フォーム */}
-          <div className="rounded border bg-white p-3 text-sm space-y-2">
-            <div className="font-semibold">このルートを保存</div>
-            <input
-              value={saveTitle}
-              onChange={(e) => setSaveTitle(e.target.value)}
-              placeholder="旅のタイトル（例：春の東北縦断2日）"
-              className="w-full px-3 py-2 border rounded text-sm"
-            />
-            {saveError && <div className="text-xs text-red-600">{saveError}</div>}
-            <div className="flex gap-2">
-              <Button
-                onClick={async () => {
-                  if (!routeResult) return;
-                  const title = saveTitle.trim();
-                  if (!title) { setSaveError('タイトルを入力してください'); return; }
-                  setSaveError(null);
-                  setSaving(true);
-                  try {
-                    const selectionPayload = {
-                      origin: selection.origin,
-                      destination: selection.destination,
-                      vias: selection.vias,
-                      priority: 'optimal',
-                      passIds: selectedPassIds,
-                    };
-                    const res = await fetch('/api/trips', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ title, selection: selectionPayload, route: routeResult }),
-                    });
-                    if (!res.ok) throw new Error(await res.text());
-                    setSaveTitle('');
-                    router.push('/trips');
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setSaveError(msg);
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                disabled={saving}
-              >{saving ? '保存中...' : '保存する'}</Button>
-              <Button variant="outline" onClick={() => setSaveTitle('')}>クリア</Button>
-            </div>
-            <div className="text-xs text-slate-600">保存済みのルートは /trips で確認できます</div>
-          </div>
           {evalError && (
             <div className="text-xs text-red-600">{evalError}</div>
           )}
