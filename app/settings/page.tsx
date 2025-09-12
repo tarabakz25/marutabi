@@ -21,8 +21,8 @@ export default async function SettingsPage() {
     <SidebarProvider>
       <DashboardSidebar items={sidebarItems} />
       <SidebarInset>
-        <div className="p-12">
-          <h1 className="text-3xl font-bold mb-6">設定</h1>
+        <div className="px-6 md:px-10 py-10 md:py-12">
+          <h1 className="text-3xl font-bold mb-8">設定</h1>
           <SettingsContent />
         </div>
       </SidebarInset>
