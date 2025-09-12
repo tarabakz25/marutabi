@@ -83,22 +83,27 @@ export async function listRatingsByTrip(tripId: string): Promise<RatingRecord[]>
 
 // 最新の自己評価をトリップごとに1件ずつ返す
 export async function listLatestRatingsForTripsByUser(tripIds: string[], userId: string): Promise<Record<string, RatingRecord>> {
-  await ensureRatingsTable();
-  if (!Array.isArray(tripIds) || tripIds.length === 0) return {};
-  const placeholders = tripIds.map((_, i) => `$${i + 2}`).join(',');
-  const sql = `
-    SELECT DISTINCT ON ("tripId") *
-    FROM "Rating"
-    WHERE "userId" = $1 AND "tripId" IN (${placeholders})
-    ORDER BY "tripId", "createdAt" DESC
-  `;
-  const rows = await prisma.$queryRawUnsafe<any[]>(sql, userId, ...tripIds);
-  const map: Record<string, RatingRecord> = {};
-  for (const row of rows) {
-    const rec = normalize(row);
-    map[rec.tripId] = rec;
+  try {
+    await ensureRatingsTable();
+    if (!Array.isArray(tripIds) || tripIds.length === 0) return {};
+    const placeholders = tripIds.map((_, i) => `$${i + 2}`).join(',');
+    const sql = `
+      SELECT DISTINCT ON ("tripId") *
+      FROM "Rating"
+      WHERE "userId" = $1 AND "tripId" IN (${placeholders})
+      ORDER BY "tripId", "createdAt" DESC
+    `;
+    const rows = await prisma.$queryRawUnsafe<any[]>(sql, userId, ...tripIds);
+    const map: Record<string, RatingRecord> = {};
+    for (const row of rows) {
+      const rec = normalize(row);
+      map[rec.tripId] = rec;
+    }
+    return map;
+  } catch {
+    // DB未接続などの環境では評価なしとして扱う
+    return {};
   }
-  return map;
 }
 
 function normalize(row: any): RatingRecord {

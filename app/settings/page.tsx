@@ -3,23 +3,15 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/authOptions";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { User, Map, FileText, Settings } from "lucide-react";
 import SettingsContent from "./SettingsContent";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
 
-  const sidebarItems = [
-    { label: "Profile", href: "/dashboard", icon: User },
-    { label: "Trips", href: "/trips", icon: Map },
-    { label: "Blogs", href: "/blogs", icon: FileText },
-    { label: "Settings", href: "/settings", icon: Settings },
-  ];
-
   return (
     <SidebarProvider>
-      <DashboardSidebar items={sidebarItems} />
+      <DashboardSidebar />
       <SidebarInset>
         <div className="p-12">
           <h1 className="text-3xl font-bold mb-8">設定</h1>

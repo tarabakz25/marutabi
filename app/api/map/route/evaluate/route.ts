@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
         totalDistance: accurate?.totalDistance ?? evalInput.totalDistance,
       },
       llm,
+      schedule: llm?.schedule ?? undefined,
     }, { headers: { 'content-type': 'application/json; charset=utf-8' } });
   } catch (e) {
     console.error('Failed to evaluate route:', e);

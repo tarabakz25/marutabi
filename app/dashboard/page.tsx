@@ -16,34 +16,10 @@ export default async function DashboardPage() {
 
   const userName = (session?.user as any)?.name as string | undefined;
 
-  const sidebarItems = [
-    {
-      label: "Profile",
-      href: "/dashboard",
-      icon: User,
-    },
-    {
-      label: "Trips",
-      href: "/trips",
-      icon: Map,
-    },
-    {
-      label: "Blogs",
-      href: "/blogs",
-      icon: FileText,
-    },
-    {
-      label: "Settings",
-      href: "/settings",
-      icon: Settings,
-    },
-  ]
 
   return (
     <SidebarProvider>
-      <DashboardSidebar 
-        items={sidebarItems}
-      />
+      <DashboardSidebar />
       <SidebarInset>
         <div className="p-12">
           <div className="flex flex-col gap-4">
