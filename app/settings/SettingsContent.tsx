@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { signIn, signOut, useSession } from "next-auth/react";
 
 type FormState = {
   displayName: string;
@@ -15,6 +16,7 @@ type FormState = {
 };
 
 export default function SettingsContent() {
+  const { data: session } = useSession();
   const NAV_ITEMS = [
     "アカウント",
     "通知",
@@ -30,13 +32,22 @@ export default function SettingsContent() {
   const [active, setActive] = useState<Tab>("アカウント");
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [form, setForm] = useState<FormState>({
-    displayName: "James",
-    fullName: "James McDowel",
-    email: "james_mcdowel@puposellyllc.com",
-    phone: "+31 6 12 34 56 78",
-  });
-  const initialFormRef = useRef<FormState>(form);
+  const sessionName = (session?.user?.name ?? "").toString();
+  const sessionEmail = (session?.user?.email ?? "").toString();
+  const sessionImage = (session?.user?.image ?? undefined) as string | undefined;
+
+  const initialForm = useMemo<FormState>(
+    () => ({
+      displayName: sessionName || "",
+      fullName: sessionName || "",
+      email: sessionEmail || "",
+      phone: "",
+    }),
+    [sessionName, sessionEmail]
+  );
+
+  const [form, setForm] = useState<FormState>(initialForm);
+  const initialFormRef = useRef<FormState>(initialForm);
   const isDirty = JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
 
   useEffect(() => {
@@ -63,6 +74,12 @@ export default function SettingsContent() {
     console.log("save settings", form);
     alert("Saved!");
   };
+
+  useEffect(() => {
+    // セッションが変わったら初期値をリセットしてdirtyを解除
+    setForm(initialForm);
+    initialFormRef.current = initialForm;
+  }, [initialForm]);
 
   return (
     <div className="max-w-6xl mx-auto px-0 md:px-0">
@@ -105,7 +122,7 @@ export default function SettingsContent() {
               >
                 <section className="flex items-center gap-4">
                   <Image
-                    src={avatarPreview ?? DEFAULT_AVATAR}
+                    src={avatarPreview ?? sessionImage ?? DEFAULT_AVATAR}
                     alt="アバタープレビュー"
                     width={56}
                     height={56}
@@ -219,18 +236,28 @@ export default function SettingsContent() {
                 <section className="rounded-xl border p-4">
                   <h3 className="font-semibold mb-2">連携アカウント</h3>
                   <p className="text-sm text-gray-600 mb-4">
-                    サインインやプロフィール情報の取得に利用します
+                    現在のサインイン方法と連携状態を管理します
                   </p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <svg viewBox="0 0 48 48" className="w-6 h-6">
-                        <path d="M43.6 20.5H24v7.1h11.3C33.9 32.9 29.5 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5-5C33.4 6.1 28.9 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c10.3 0 19.2-7.5 19.2-20 0-1.2-.1-2.1-.4-3.5z" />
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                        <path d="M12 0C5.372 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.6.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.565 21.797 24 17.31 24 12 24 5.373 18.627 0 12 0z" />
                       </svg>
-                      <span className="text-sm font-medium">Google でサインイン</span>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">GitHub でサインイン</span>
+                        <span className="text-xs text-gray-500">{sessionEmail || "未ログイン"}</span>
+                      </div>
                     </div>
-                    <Button type="button" variant="outline">
-                      連携する
-                    </Button>
+                    {session ? (
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" onClick={() => signIn("github")}>再認証</Button>
+                        <Button type="button" variant="outline" onClick={() => signOut({ callbackUrl: "/" })}>ログアウト</Button>
+                      </div>
+                    ) : (
+                      <Button type="button" variant="outline" onClick={() => signIn("github", { callbackUrl: "/dashboard" })}>
+                        連携してサインイン
+                      </Button>
+                    )}
                   </div>
                 </section>
 
