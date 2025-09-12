@@ -1,4 +1,4 @@
-import { PrismaClient } from "./generated/prisma";
+import { PrismaClient } from "@prisma/client";
 
 declare global {
   // var を使うグローバル宣言は Next.js ドキュメントでも推奨されるため許容
