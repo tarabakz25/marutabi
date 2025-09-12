@@ -340,7 +340,14 @@ export default function Sidebar({
 
   // 検索結果が到着したら結果ビューを表示
   useEffect(() => {
-    if (routeResult) setShowResults(true);
+    if (routeResult) {
+      setShowResults(true);
+      // 検索結果表示時は上部の駅選択UIを閉じる
+      setActiveInput(null);
+      setQuery('');
+      setResults([]);
+      setIsEditing(false);
+    }
   }, [routeResult]);
 
   const handleStationSelect = (station: StationSearchResult) => {
@@ -421,7 +428,7 @@ export default function Sidebar({
       )}
 
       {/* 駅名検索 */}
-      {activeInput !== null && (
+      {!showResults && activeInput !== null && (
         <div className="space-y-2 border-2 border-primary rounded p-3 bg-primary/5">
           <div className="text-sm font-medium text-primary">
             {activeInput === 'origin' && '出発駅を選択'}
@@ -460,57 +467,17 @@ export default function Sidebar({
       )}
 
       {/* 駅選択リスト */}
-      <div className="space-y-3 relative">
-        {/* 左側の縦ライン（丸同士を接続） */}
-        <div className="absolute left-1 top-1 bottom-1 w-px bg-slate-300 pointer-events-none"></div>
-        {/* 出発駅 */}
-        <div className="flex items-center gap-2 relative z-10">
-          <div className="w-2 h-2 rounded-full bg-green-500"></div>
-          <div className="flex-1">
-            {selection.origin ? (
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{selection.origin.name}</span>
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={() => {
-                    selectionSnapshotRef.current = {
-                      originId: selection.origin?.id,
-                      destinationId: selection.destination?.id,
-                      viaIds: selection.vias.map(v => v?.id),
-                    };
-                    setIsEditing(true);
-                    setActiveInput('origin');
-                    onChangeMode('origin');
-                  }}
-                >
-                  変更
-                </Button>
-              </div>
-            ) : (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full justify-start text-muted-foreground"
-                onClick={() => {
-                  setActiveInput('origin');
-                  onChangeMode('origin');
-                }}
-              >
-                出発駅を選択
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* 経由駅 */}
-        {selection.vias.map((via, index) => (
-          <div key={`via-${index}`} className="flex items-center gap-2 relative z-10">
-            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+      {!showResults && (
+        <div className="space-y-3 relative">
+          {/* 左側の縦ライン（丸同士を接続） */}
+          <div className="absolute left-1 top-1 bottom-1 w-px bg-slate-300 pointer-events-none"></div>
+          {/* 出発駅 */}
+          <div className="flex items-center gap-2 relative z-10">
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
             <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{via.name}</span>
-                <div className="flex gap-1">
+              {selection.origin ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{selection.origin.name}</span>
                   <Button 
                     size="sm" 
                     variant="ghost" 
@@ -521,79 +488,121 @@ export default function Sidebar({
                         viaIds: selection.vias.map(v => v?.id),
                       };
                       setIsEditing(true);
-                      setActiveInput(index);
-                      onChangeMode('via');
+                      setActiveInput('origin');
+                      onChangeMode('origin');
                     }}
                   >
                     変更
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => removeViaStation(index)}
-                  >
-                    <FaTimes className="w-3 h-3" />
-                  </Button>
+                </div>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full justify-start text-muted-foreground"
+                  onClick={() => {
+                    setActiveInput('origin');
+                    onChangeMode('origin');
+                  }}
+                >
+                  出発駅を選択
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {/* 経由駅 */}
+          {selection.vias.map((via, index) => (
+            <div key={`via-${index}`} className="flex items-center gap-2 relative z-10">
+              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{via.name}</span>
+                  <div className="flex gap-1">
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => {
+                        selectionSnapshotRef.current = {
+                          originId: selection.origin?.id,
+                          destinationId: selection.destination?.id,
+                          viaIds: selection.vias.map(v => v?.id),
+                        };
+                        setIsEditing(true);
+                        setActiveInput(index);
+                        onChangeMode('via');
+                      }}
+                    >
+                      変更
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => removeViaStation(index)}
+                    >
+                      <FaTimes className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
+          ))}
+          
+          {/* 経由駅追加 */}
+          <div className="flex items-center gap-2 relative z-10">
+            <div className="w-2 h-2 rounded-full bg-blue-200"></div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex-1 justify-start text-muted-foreground"
+              onClick={addViaStation}
+            >
+              <FaPlus className="w-3 h-3 mr-2" />
+              経由駅を追加
+            </Button>
           </div>
-        ))}
-
-        {/* 経由駅追加 */}
-        <div className="flex items-center gap-2 relative z-10">
-          <div className="w-2 h-2 rounded-full bg-blue-200"></div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="flex-1 justify-start text-muted-foreground"
-            onClick={addViaStation}
-          >
-            <FaPlus className="w-3 h-3 mr-2" />
-            経由駅を追加
-          </Button>
-        </div>
-
-        {/* 到着駅 */}
-        <div className="flex items-center gap-2 relative z-10">
-          <div className="w-2 h-2 rounded-full bg-red-500"></div>
-          <div className="flex-1">
-            {selection.destination ? (
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{selection.destination.name}</span>
+          
+          {/* 到着駅 */}
+          <div className="flex items-center gap-2 relative z-10">
+            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+            <div className="flex-1">
+              {selection.destination ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{selection.destination.name}</span>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => {
+                      selectionSnapshotRef.current = {
+                        originId: selection.origin?.id,
+                        destinationId: selection.destination?.id,
+                        viaIds: selection.vias.map(v => v?.id),
+                      };
+                      setIsEditing(true);
+                      setActiveInput('destination');
+                      onChangeMode('destination');
+                    }}
+                  >
+                    変更
+                  </Button>
+                </div>
+              ) : (
                 <Button 
+                  variant="outline" 
                   size="sm" 
-                  variant="ghost" 
+                  className="w-full justify-start text-muted-foreground"
                   onClick={() => {
-                    selectionSnapshotRef.current = {
-                      originId: selection.origin?.id,
-                      destinationId: selection.destination?.id,
-                      viaIds: selection.vias.map(v => v?.id),
-                    };
-                    setIsEditing(true);
                     setActiveInput('destination');
                     onChangeMode('destination');
                   }}
                 >
-                  変更
+                  到着駅を選択
                 </Button>
-              </div>
-            ) : (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full justify-start text-muted-foreground"
-                onClick={() => {
-                  setActiveInput('destination');
-                  onChangeMode('destination');
-                }}
-              >
-                到着駅を選択
-              </Button>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {!showResults && <Separator />}
 
