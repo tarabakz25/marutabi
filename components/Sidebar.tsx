@@ -469,7 +469,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="w-[22rem] fixed left-4 top-24 bottom-24 z-40 rounded-2xl border shadow-lg bg-white/85 backdrop-blur p-4 flex flex-col gap-4 overflow-y-auto">
+    <aside className="fixed inset-x-2 sm:left-4 sm:right-auto top-20 sm:top-24 bottom-24 z-40 rounded-xl sm:rounded-2xl border shadow-lg bg-white/90 backdrop-blur p-3 sm:p-4 flex flex-col gap-4 overflow-y-auto w-auto sm:w-[22rem]">
       {!showResults && (
         <div className="space-y-2">
           <h2 className="text-base font-semibold">経路検索</h2>

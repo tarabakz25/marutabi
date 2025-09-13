@@ -81,21 +81,21 @@ export default function HeaderActions() {
   }, [query]);
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2 sm:gap-3">
       {/* Search box */}
-      <div className="relative">
-        <div className="flex items-center gap-2 border rounded-md px-3 h-9 bg-white min-w-64">
+      <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-md">
+        <div className="flex items-center gap-2 border rounded-md px-2 sm:px-3 h-9 bg-white w-full">
           <Search className="size-4 text-slate-500" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="駅名を検索"
-            className="outline-none text-sm flex-1"
+            className="outline-none text-sm flex-1 min-w-0"
             onFocus={() => setOpen(true)}
           />
         </div>
         {open && (results.length > 0 || loading || query) && (
-          <div className="absolute z-50 mt-2 w-[28rem] max-w-[80vw] rounded-md border bg-white shadow-md">
+          <div className="absolute z-50 mt-2 w-screen max-w-[90vw] sm:w-[28rem] sm:max-w-[80vw] rounded-md border bg-white shadow-md left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0">
             <div className="p-2 text-xs text-slate-500">
               {loading ? "検索中..." : results.length ? "候補" : "該当なし"}
             </div>

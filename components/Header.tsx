@@ -27,7 +27,7 @@ export default async function Header() {
   const fallbackInitial = userName?.[0]?.toUpperCase() ?? "U";
 
   return (
-    <div className="w-full h-20 sticky top-0 z-50 bg-white border-b flex items-center justify-between px-6">
+    <div className="w-full h-14 sm:h-16 md:h-20 sticky top-0 z-50 bg-white border-b flex items-center justify-between px-4 sm:px-6">
       <div className="flex-1">
         {!session?.user && (
           <Link href='/marketing' className={`text-2xl font-bold ${nanumGothicCoding.className}`}>まるたび</Link>

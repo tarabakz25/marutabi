@@ -300,7 +300,7 @@ export default function MapWithSidebar() {
   };
 
   return (
-    <div className="w-full h-[calc(100dvh-9.3rem)] relative">
+    <div className="w-full min-h-[calc(100svh-8rem)] sm:min-h-[calc(100svh-9.5rem)] relative">
       <Sidebar
         mode={mode}
         selection={selection}
@@ -327,7 +327,7 @@ export default function MapWithSidebar() {
           shouldResetView={shouldResetView}
         />
         {routeResult?.summary?.passes && routeResult.summary.passes.length > 0 && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-4 z-40 flex flex-wrap gap-2 max-w-[80vw] justify-center">
+          <div className="absolute left-1/2 -translate-x-1/2 top-2 sm:top-4 z-40 flex flex-wrap gap-2 max-w-[90vw] sm:max-w-[80vw] justify-center px-2">
             {routeResult.summary.passes.map((p) => (
               <span key={p} className="text-xs px-2 py-1 rounded-full bg-amber-100 border border-amber-200 text-amber-900 shadow-sm whitespace-nowrap">
                 {p}
