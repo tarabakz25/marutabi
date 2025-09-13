@@ -5,7 +5,7 @@ import Image from "next/image"
 
 export default function Login() {
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
+    <div className="h-screen flex flex-col md:flex-row">
       <div className="w-2/3">
         <Image className="w-full h-full object-cover" src="/stacked-peaks-haikei.svg" alt="Marutabi" width={1000} height={1000} />
       </div>

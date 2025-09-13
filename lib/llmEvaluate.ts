@@ -5,29 +5,34 @@ function buildPrompt(input: LLMRouteEvalInput): string {
   const locale = input.locale ?? 'ja';
   const style = input.style ?? 'concise';
   const notes = input.userNotes ? `ユーザーの希望: ${input.userNotes}` : '';
-  const textJa = `あなたは旅程の評価アシスタントです。次の旅のメトリクスを基に、0-100 のスコアと理由、全体コメント(1-2文)、さらにおすすめのタイムスケジュールを日本語で出力してください。必ず JSON のみを返してください。
+  const textJa = `あなたは旅程の評価アシスタントです。次の旅のメトリクスを基に、(1) 0-100 のスコアと理由、(2) 全体コメント(1-2文)、(3) おすすめのタイムスケジュール、(4) 安定性評価(運休/見合わせのリスク観点)を日本語で出力してください。必ず JSON のみを返してください。
 メトリクス:
 - 合計時間(分): ${input.totalTimeMinutes}
 - 合計運賃(円): ${input.totalFare}
 - 合計距離(m): ${input.totalDistance}
 - 乗換回数: ${input.transferCount}
 ${notes}
-出力(JSON): {"score": number, "reasons": string[], "risks": string[], "comment": string, "schedule": {"time": string, "title": string, "description"?: string}[] }
+出力(JSON): {"score": number, "reasons": string[], "risks": string[], "comment": string, "schedule": {"time": string, "title": string, "description"?: string}[], "stability": {"label": "green"|"yellow"|"red", "title": string, "notes"?: string[]} }
 スケジュール要件:
 - 出発想定時刻を設定し(例: 08:00)、合計時間(${input.totalTimeMinutes}分)に収まるように 3-8 件の項目で構成
 - time は24時間表記の HH:MM、日本時間、昇順
 - title は 10-20 文字程度で簡潔に。description は任意で 1 文
 - 不確かな具体地名は出さない（一般化表現: 駅到着/乗換/小休憩 など）
+安定性評価の方針:
+- 効率(時間/料金)の評価には触れず、運休・遅延・見合わせの一般的リスクや代替余地を簡潔にまとめる
+- 現在時点の実運行APIが無い前提で、一般論を過度に断定しない表現に留める
 制約: 文字数は${style === 'concise' ? '短く' : 'やや詳しく'}、推測は避ける、フォーマットは厳密に JSON のみ。`;
 
-  const textEn = `You are a travel route evaluator. Given the following metrics, return a 0-100 score, concise reasons, a short overall comment (1-2 sentences), and a recommended time schedule. JSON only.
+  const textEn = `You are a travel route evaluator. Given the following metrics, return (1) a 0-100 score with reasons, (2) a short overall comment (1-2 sentences), (3) a recommended time schedule, and (4) a stability assessment (operation suspensions/line disruptions). JSON only.
 Metrics: time(min)=${input.totalTimeMinutes}, fare(JPY)=${input.totalFare}, distance(m)=${input.totalDistance}, transfers=${input.transferCount}. ${notes}
-Output(JSON): {"score": number, "reasons": string[], "risks": string[], "comment": string, "schedule": {"time": string, "title": string, "description"?: string}[] }
+Output(JSON): {"score": number, "reasons": string[], "risks": string[], "comment": string, "schedule": {"time": string, "title": string, "description"?: string}[], "stability": {"label": "green"|"yellow"|"red", "title": string, "notes"?: string[]} }
 Schedule requirements:
 - Assume a start time (e.g., 08:00) and fit items within total time (${input.totalTimeMinutes} min), 3-8 items
 - time in 24h HH:MM, ascending order, JST
 - Keep titles concise (10-20 chars), description optional, one sentence
 - Avoid specific place names if uncertain (use generalized wording)
+Stability policy:
+- Do not discuss efficiency (time/cost). Focus on risk of suspensions/delays and general mitigations.
 Constraints: Keep it ${style === 'concise' ? 'concise' : 'slightly detailed'}, avoid speculation, strictly JSON.`;
 
   return locale === 'ja' ? textJa : textEn;
@@ -86,6 +91,14 @@ export async function evaluateRouteWithLLM(input: LLMRouteEvalInput): Promise<LL
           .filter((it: any) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(it.time) && it.title)
           .slice(0, 10)
       : undefined;
+
+    const stability = parsed.stability && typeof parsed.stability === 'object'
+      ? {
+          label: ['green','yellow','red'].includes(String(parsed.stability.label)) ? parsed.stability.label as 'green'|'yellow'|'red' : undefined,
+          title: typeof parsed.stability.title === 'string' ? parsed.stability.title : undefined,
+          notes: Array.isArray(parsed.stability.notes) ? (parsed.stability.notes as any[]).filter((x) => typeof x === 'string').slice(0, 5) : undefined,
+        }
+      : undefined;
     if (!comment || comment.trim().length < 3) {
       // Fallback short comment from reasons
       const top = reasons.slice(0, 2).join('、');
@@ -93,7 +106,7 @@ export async function evaluateRouteWithLLM(input: LLMRouteEvalInput): Promise<LL
         ? `総合スコアは${score}。主な評価ポイントは「${top}」。`
         : `総合スコアは${score}です。`;
     }
-    return { score, reasons, risks, comment, schedule };
+    return { score, reasons, risks, comment, schedule, stability };
   } catch (e) {
     return { score: 0, reasons: ['LLM応答の解析に失敗しました'], risks: [], comment: '解析に失敗しました。' };
   }

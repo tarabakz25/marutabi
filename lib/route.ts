@@ -427,58 +427,40 @@ export async function findRoute({
     const timeSeg = timeFromDistance(segDist);
     fareTotal += fareSeg;
     timeTotal += timeSeg;
-    // Build contiguous segments by line name to enable per-line coloring
-    let segStartIdx = 0;
-    const currentLine = (idx: number) => {
-      if (idx >= path.length - 1) return undefined;
+    // Build contiguous segments of REAL rail edges (exclude 'Transfer' edges)
+    type RealRun = { startEdgeIdx: number; endEdgeIdx: number; lineName: string };
+    const runs: RealRun[] = [];
+    const edgeAttrAt = (idx: number) => {
       const edges = adjacency.get(path[idx]) ?? [];
-      return edges.find((e) => e.to === path[idx + 1])?.line ?? 'UnknownLine';
+      return edges.find((e) => e.to === path[idx + 1]);
     };
+    let runStart: number | null = null;
+    let runLine: string | null = null;
     for (let j = 0; j < path.length - 1; j++) {
-      const lineNameHere = currentLine(j);
-      const lineNameNext = currentLine(j + 1);
-      const isBreak = lineNameHere !== lineNameNext;
-      if (isBreak) {
-        const coordsSlice = path.slice(segStartIdx, j + 2).map((nid) => nodeCoords.get(nid)!) as Position[];
-        const partDist = coordsSlice.reduce((acc, cur, idx) => idx === 0 ? 0 : acc + haversine(coordsSlice[idx - 1], cur), 0);
-        features.push({
-          type: 'Feature',
-          properties: {
-            from: points[i],
-            to: points[i + 1],
-            seq: i,
-            fare: fareFromDistance(partDist),
-            time: timeFromDistance(partDist),
-            distance: partDist,
-            stationCount: countStationsInRange(segStartIdx, j + 1),
-            operators: operatorsArr,
-            lineName: lineNameHere,
-          },
-          geometry: { type: 'LineString', coordinates: coordsSlice },
-        });
-        // transfer at boundary node j+1 (line change point)
-        const boundaryNode = path[j + 1];
-        const posMid = nodeCoords.get(boundaryNode);
-        if (posMid) {
-          let sid = (nodeStations.get(boundaryNode) ?? [])[0];
-          if (!sid) {
-            const near = findNodesWithinRadius(posMid, 180);
-            for (const nid of near) {
-              const sids = nodeStations.get(nid);
-              if (sids && sids[0]) { sid = sids[0]; break; }
-            }
-          }
-          if (sid && !transferSet.has(sid)) {
-            transferSet.set(sid, { id: sid, position: (stationInfo.get(sid)?.position ?? posMid) as [number, number] });
-          }
+      const e = edgeAttrAt(j);
+      if (!e || e.operator === 'Transfer') {
+        // close current run if open
+        if (runStart !== null && runLine) {
+          runs.push({ startEdgeIdx: runStart, endEdgeIdx: j - 1, lineName: runLine });
+          runStart = null; runLine = null;
         }
-        segStartIdx = j + 1;
+        continue;
+      }
+      const thisLine = e.line ?? 'UnknownLine';
+      if (runStart === null) {
+        runStart = j; runLine = thisLine;
+      } else if (runLine !== thisLine) {
+        // line changed: close previous, start new
+        runs.push({ startEdgeIdx: runStart, endEdgeIdx: j - 1, lineName: runLine! });
+        runStart = j; runLine = thisLine;
       }
     }
-
-    // レグ末尾の残り区間を追加（路線が変わらずループを抜けた場合）
-    if (segStartIdx < path.length - 1) {
-      const coordsSlice = path.slice(segStartIdx).map((nid) => nodeCoords.get(nid)!) as Position[];
+    if (runStart !== null && runLine) {
+      runs.push({ startEdgeIdx: runStart, endEdgeIdx: (path.length - 2), lineName: runLine });
+    }
+    // Emit features for each real run
+    for (const r of runs) {
+      const coordsSlice = path.slice(r.startEdgeIdx, r.endEdgeIdx + 2).map((nid) => nodeCoords.get(nid)!) as Position[];
       const partDist = coordsSlice.reduce((acc, cur, idx) => idx === 0 ? 0 : acc + haversine(coordsSlice[idx - 1], cur), 0);
       features.push({
         type: 'Feature',
@@ -489,9 +471,9 @@ export async function findRoute({
           fare: fareFromDistance(partDist),
           time: timeFromDistance(partDist),
           distance: partDist,
-          stationCount: countStationsInRange(segStartIdx, path.length - 1),
+          stationCount: countStationsInRange(r.startEdgeIdx, r.endEdgeIdx + 1),
           operators: operatorsArr,
-          lineName: currentLine(segStartIdx),
+          lineName: r.lineName,
         },
         geometry: { type: 'LineString', coordinates: coordsSlice },
       });

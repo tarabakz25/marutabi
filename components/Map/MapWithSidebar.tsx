@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Map } from "@/components/Map";
+import type { DeckMapHandle } from "@/components/Map/DeckMap";
 import { Button } from "@/components/ui/button";
 import type { SelectedStations, StationSelection, SelectionMode } from "./types";
 import type { RouteResult } from "@/lib/route";
@@ -234,6 +235,7 @@ export default function MapWithSidebar() {
 
   // キャンバスのスクショ取得（deck.gl ラッパのDOMを対象に）
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const deckRef = useRef<DeckMapHandle | null>(null);
   const takeScreenshot = (): string | null => {
     try {
       const el = containerRef.current?.querySelector('canvas') as HTMLCanvasElement | null;
@@ -260,10 +262,21 @@ export default function MapWithSidebar() {
 
   const handleEvaluateNavigate = (route: RouteResult) => {
     try {
-      const img = takeScreenshot();
-      sessionStorage.setItem('route_result', JSON.stringify(route));
-      if (img) sessionStorage.setItem('route_image', img);
-      router.push('/evaluate');
+      // 可能ならDeckのfit後スクショを優先
+      const doNext = async () => {
+        let img: string | null = null;
+        try {
+          img = await deckRef.current?.captureScreenshotFitRoute?.() ?? null;
+        } catch {}
+        if (!img) {
+          img = takeScreenshot();
+        }
+        sessionStorage.setItem('route_result', JSON.stringify(route));
+        if (img) sessionStorage.setItem('route_image', img);
+        router.push('/evaluate');
+      };
+      // 非同期に進める
+      void doNext();
     } catch {
       router.push('/evaluate');
     }
@@ -295,6 +308,7 @@ export default function MapWithSidebar() {
       />
       <div className="absolute inset-0" ref={containerRef}>
         <Map 
+          ref={deckRef as any}
           onStationClick={handleStationClick} 
           selected={selection} 
           routeGeojson={routeGeojson} 

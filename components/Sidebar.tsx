@@ -88,6 +88,16 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
     const seq = Number(((f as any).properties?.seq) ?? -1);
     if (seq >= 0) featuresPerSeq.set(seq, (featuresPerSeq.get(seq) ?? 0) + 1);
   }
+  // 各 seq の features 開始インデックス（グローバル）を構築
+  const featuresBaseForSeq = new Map<number, number>();
+  {
+    let acc = 0;
+    const maxSeq = Math.max(-1, ...Array.from(featuresPerSeq.keys()));
+    for (let s = 0; s <= maxSeq; s++) {
+      featuresBaseForSeq.set(s, acc);
+      acc += featuresPerSeq.get(s) ?? 0;
+    }
+  }
 
   // 挿入順（経路順）に並んだ transfers を各区間(seq)にマップ
   const orderedTransfers = [...(routeResult?.transfers ?? [])];
@@ -103,9 +113,10 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
   let noSeqPtr = 0;
   let sortOrder = 0;
 
-  // 先頭: 出発
+  // 先頭: 出発（最初のseq=0の先頭区間に紐づけ）
   if (selection.origin) {
-    timelineItems.push({ ...selection.origin, type: 'origin', sortOrder: sortOrder++ });
+    const base0 = featuresBaseForSeq.get(0) ?? 0;
+    timelineItems.push({ ...selection.origin, type: 'origin', featureIndex: base0, sortOrder: sortOrder++ });
   }
 
   // 区間数: 経由数 + 1（出発→最初の経由、…、最終経由→到着）
@@ -113,23 +124,25 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
     ? (selection.vias.length + 1)
     : 0;
   for (let leg = 0; leg < legCount; leg++) {
-    // まずseqに紐づく乗換を優先表示
+    const base = featuresBaseForSeq.get(leg) ?? 0;
+    const segParts = Math.max(1, featuresPerSeq.get(leg) ?? 1);
+    const transfersNeeded = Math.max(0, segParts - 1);
+    // まずseqに紐づく乗換を優先表示（k番目の乗換→乗換後は leg 内の feature index: base + (k+1)）
     const seqTransfers = transfersBySeq.get(leg) ?? [];
     if (seqTransfers.length > 0) {
-      for (const t of seqTransfers) {
+      seqTransfers.forEach((t, k) => {
         const info = getTransferInfo(t.id);
         timelineItems.push({
           id: info.id,
           name: info.name || '乗換駅',
           type: 'transfer',
           position: info.position,
+          featureIndex: base + Math.min(k + 1, Math.max(0, segParts - 1)),
           sortOrder: sortOrder++,
         });
-      }
-    } else {
-      // seqが無ければ features から推定して不足分だけ noSeqTransfers から消費
-      const segParts = Math.max(1, featuresPerSeq.get(leg) ?? 1);
-      const transfersNeeded = Math.max(0, segParts - 1);
+      });
+    } else if (transfersNeeded > 0) {
+      // seqが無い場合は推定: 不足数だけ noSeqTransfers から消費
       for (let k = 0; k < transfersNeeded && noSeqPtr < noSeqTransfers.length; k++) {
         const t = noSeqTransfers[noSeqPtr++];
         const info = getTransferInfo(t.id);
@@ -138,16 +151,18 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
           name: info.name || '乗換駅',
           type: 'transfer',
           position: info.position,
+          featureIndex: base + Math.min(k + 1, Math.max(0, segParts - 1)),
           sortOrder: sortOrder++,
         });
       }
     }
-    // 区間の終点（経由 or 到着）を追加
+    // 区間の終点（経由 or 到着）を追加（その区間の最後のfeatureに紐づけ）
     const nextStation = leg < selection.vias.length ? selection.vias[leg] : selection.destination;
     if (nextStation) {
       timelineItems.push({
         ...nextStation,
         type: leg < selection.vias.length ? 'via' : 'destination',
+        featureIndex: base + Math.max(0, segParts - 1),
         sortOrder: sortOrder++,
       });
     }
@@ -175,24 +190,18 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
   }[t]);
 
   // features を安全に参照（不足時は末尾を使う）
-  const getFeatureForIndex = (i: number) => {
+  const getFeatureForIndex = (i: number | undefined) => {
     const feats = routeResult.geojson.features;
     if (!feats || feats.length === 0) return undefined as any;
-    const idx = Math.min(i, feats.length - 1);
+    const idx = Math.min(Math.max(0, i ?? 0), feats.length - 1);
     return feats[idx];
   };
-
-  // タイムラインに沿って区間インデックスを進める（非乗換アイテムで進む）
-  let segIdx = 0;
   return (
     <div className="space-y-4">
       {timelineItems.map((item, idx) => {
-        // transfer は「現在の次区間」を表示したいのでプリインクリメントせず、描画後に進める
-        const featureHere = getFeatureForIndex(Math.max(0, segIdx));
+        const featureHere = getFeatureForIndex(item.featureIndex);
         const lineName = featureHere?.properties?.lineName ?? featureHere?.properties?.operators?.join(', ') ?? '不明';
         const stationCount = featureHere?.properties?.stationCount ?? 0;
-        // 表示後に区間を進める（transfer もここで進める）
-        segIdx = Math.min(segIdx + 1, (routeResult.geojson.features?.length ?? 1) - 1);
         return (
           <div key={item.id + idx} className="flex items-start gap-3">
             <div className="flex flex-col items-center">

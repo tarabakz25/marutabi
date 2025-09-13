@@ -16,7 +16,7 @@ type EvalResponse = {
     transferCount: number;
     totalDistance: number;
   };
-  llm?: { reasons?: string[]; risks?: string[]; comment?: string } | { error: string };
+  llm?: { reasons?: string[]; risks?: string[]; comment?: string; stability?: { label: 'green'|'yellow'|'red'; title: string; notes?: string[] } } | { error: string };
   schedule?: { time: string; title: string; description?: string }[];
 };
 
@@ -165,12 +165,23 @@ export default function EvaluatePage() {
               {result.llm && !(result.llm as any).error && (
                 <div className="rounded border bg-white p-4 space-y-2">
                   <div className="text-sm font-semibold">AI コメント</div>
+                  {(result.llm as any).stability && (
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const s = (result.llm as any).stability;
+                        const color = s.label === 'green' ? 'bg-green-100 text-green-800 border-green-200' : s.label === 'yellow' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-red-100 text-red-800 border-red-200';
+                        return (
+                          <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${color}`}>{s.title ?? (s.label === 'green' ? '安定' : s.label === 'yellow' ? '注意' : '警戒')}</span>
+                        );
+                      })()}
+                    </div>
+                  )}
                   {(result.llm as any).comment && (
                     <div className="text-sm text-slate-700">{(result.llm as any).comment}</div>
                   )}
-                  {Array.isArray((result.llm as any).reasons) && ((result.llm as any).reasons.length > 0) && (
+                  {Array.isArray((result.llm as any).stability?.notes) && ((result.llm as any).stability.notes.length > 0) && (
                     <ul className="list-disc pl-5 text-sm">
-                      {((result.llm as any).reasons ?? []).map((r: string, idx: number) => (
+                      {((result.llm as any).stability.notes ?? []).map((r: string, idx: number) => (
                         <li key={idx}>{r}</li>
                       ))}
                     </ul>

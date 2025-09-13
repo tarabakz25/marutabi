@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, BitmapLayer, TextLayer, GeoJsonLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
@@ -60,6 +60,10 @@ const gridSample = (points: { position: [number, number] }[], cellDeg: number) =
   return out;
 };
 
+export type DeckMapHandle = {
+  captureScreenshotFitRoute: () => Promise<string | null>;
+};
+
 type Props = {
   onStationClick?: (station: StationSelection) => void;
   selected?: SelectedStations;
@@ -71,7 +75,7 @@ type Props = {
   shouldResetView?: number;
 };
 
-export default function DeckMap({ onStationClick, selected, routeGeojson, routeOperators, routeStations, flyTo, onLoadComplete, shouldResetView }: Props) {
+function DeckMapImpl({ onStationClick, selected, routeGeojson, routeOperators, routeStations, flyTo, onLoadComplete, shouldResetView }: Props, ref: React.Ref<DeckMapHandle>) {
   const [railGeojson, setRailGeojson] = useState<any | null>(null);
   const [stationGeojson, setStationGeojson] = useState<any | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -426,6 +430,42 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
 
   const hasRoute = Boolean(routeGeojson?.features?.length);
 
+  // ルートのバウンディングボックスを計算
+  const computeRouteBounds = () => {
+    try {
+      const features = (routeGeojson?.features ?? []) as any[];
+      if (!features || features.length === 0) return null as unknown as { minLng: number; minLat: number; maxLng: number; maxLat: number } | null;
+      let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+      for (const f of features) {
+        const geom = f?.geometry;
+        if (!geom) continue;
+        if (geom.type === 'LineString' && Array.isArray(geom.coordinates)) {
+          const coords = geom.coordinates as [number, number][];
+          for (const [lng, lat] of coords) {
+            if (lng < minLng) minLng = lng;
+            if (lat < minLat) minLat = lat;
+            if (lng > maxLng) maxLng = lng;
+            if (lat > maxLat) maxLat = lat;
+          }
+        } else if (geom.type === 'MultiLineString' && Array.isArray(geom.coordinates)) {
+          const lines = geom.coordinates as [number, number][][];
+          for (const line of lines) {
+            for (const [lng, lat] of line) {
+              if (lng < minLng) minLng = lng;
+              if (lat < minLat) minLat = lat;
+              if (lng > maxLng) maxLng = lng;
+              if (lat > maxLat) maxLat = lat;
+            }
+          }
+        }
+      }
+      if (!Number.isFinite(minLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLng) || !Number.isFinite(maxLat)) return null;
+      return { minLng, minLat, maxLng, maxLat };
+    } catch {
+      return null;
+    }
+  };
+
   // 経路表示時は自動フィット（ルート全体が収まるようにビューを調整）
   useEffect(() => {
     try {
@@ -433,29 +473,67 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
       const width = containerSize.width;
       const height = containerSize.height;
       if (width <= 0 || height <= 0) return;
-      const features = (routeGeojson?.features ?? []) as any[];
-      if (features.length === 0) return;
-      let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
-      for (const f of features) {
-        const geom = f?.geometry;
-        if (!geom) continue;
-        const coords: [number, number][] = (geom.type === 'LineString' ? geom.coordinates : []).filter(Array.isArray);
-        for (const [lng, lat] of coords) {
-          if (lng < minLng) minLng = lng;
-          if (lat < minLat) minLat = lat;
-          if (lng > maxLng) maxLng = lng;
-          if (lat > maxLat) maxLat = lat;
-        }
-      }
-      if (!Number.isFinite(minLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLng) || !Number.isFinite(maxLat)) return;
+      const bounds = computeRouteBounds();
+      if (!bounds) return;
       const vp = new WebMercatorViewport({ width, height, longitude: viewState.longitude, latitude: viewState.latitude, zoom: viewState.zoom });
-      const { longitude, latitude, zoom } = vp.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 48 });
+      const { longitude, latitude, zoom } = vp.fitBounds([[bounds.minLng, bounds.minLat], [bounds.maxLng, bounds.maxLat]], { padding: 48 });
       setViewState((prev) => ({ ...prev, longitude, latitude, zoom }));
     } catch {
       // ignore fit errors
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasRoute, routeGeojson, containerSize.width, containerSize.height]);
+
+  // 内部関数: ルートにフィットしてからキャンバスをキャプチャ
+  const captureScreenshotFitRouteInternal = async (): Promise<string | null> => {
+    try {
+      const el = containerRef.current?.querySelector('canvas') as HTMLCanvasElement | null;
+      if (!el) return null;
+      if (!hasRoute) return null;
+      const width = containerSize.width;
+      const height = containerSize.height;
+      if (width <= 0 || height <= 0) return null;
+      const bounds = computeRouteBounds();
+      if (!bounds) return null;
+      const vp = new WebMercatorViewport({ width, height, longitude: viewState.longitude, latitude: viewState.latitude, zoom: viewState.zoom });
+      const { longitude, latitude, zoom } = vp.fitBounds([[bounds.minLng, bounds.minLat], [bounds.maxLng, bounds.maxLat]], { padding: 64 });
+      setViewState((prev) => ({ ...prev, longitude, latitude, zoom }));
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const srcW = Math.max(1, el.width);
+      const srcH = Math.max(1, el.height);
+      const maxW = 1200;
+      const scale = Math.min(1, maxW / srcW);
+      const dstW = Math.max(1, Math.floor(srcW * scale));
+      const dstH = Math.max(1, Math.floor(srcH * scale));
+      const off = document.createElement('canvas');
+      off.width = dstW;
+      off.height = dstH;
+      const ctx = off.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(el, 0, 0, srcW, srcH, 0, 0, dstW, dstH);
+      const dataUrl = off.toDataURL('image/jpeg', 0.85);
+      return dataUrl;
+    } catch {
+      return null;
+    }
+  };
+
+  // Imperative handle: 親から直接呼び出す場合
+  useImperativeHandle(ref, () => ({
+    captureScreenshotFitRoute: async () => captureScreenshotFitRouteInternal()
+  }), [captureScreenshotFitRouteInternal]);
+
+  // カスタムイベント経由でのキャプチャ要求に対応
+  useEffect(() => {
+    const onCapture = async (e: Event) => {
+      const ce = e as CustomEvent<{ requestId?: string }>;
+      const requestId = ce.detail?.requestId;
+      const dataUrl = await captureScreenshotFitRouteInternal();
+      window.dispatchEvent(new CustomEvent('map:captureResult', { detail: { requestId, dataUrl } }));
+    };
+    window.addEventListener('map:captureFit', onCapture as EventListener);
+    return () => window.removeEventListener('map:captureFit', onCapture as EventListener);
+  }, []);
 
   const layers = [
     new TileLayer({
@@ -647,3 +725,7 @@ export default function DeckMap({ onStationClick, selected, routeGeojson, routeO
     </div>
   );
 }
+
+const DeckMap = forwardRef<DeckMapHandle, Props>(DeckMapImpl);
+
+export default DeckMap;
