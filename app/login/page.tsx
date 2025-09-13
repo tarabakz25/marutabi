@@ -5,12 +5,12 @@ import Image from "next/image"
 
 export default function Login() {
   return (
-    <div className="h-screen flex flex-col md:flex-row">
+    <div className="min-h-svh flex flex-col md:flex-row">
       <div className="w-2/3">
         <Image className="w-full h-full object-cover" src="/stacked-peaks-haikei.svg" alt="Marutabi" width={1000} height={1000} />
       </div>
 
-      <div className="w-1/3 bg-white flex items-center justify-center p-8 h-screen">
+      <div className="w-full md:w-1/3 bg-white flex items-center justify-center p-6 md:p-8 min-h-[40svh] md:min-h-svh">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center">
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Login</h2>

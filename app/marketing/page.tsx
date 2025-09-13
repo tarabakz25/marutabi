@@ -4,7 +4,7 @@ import Footer from '@/components/Footer';
 
 export default function MarketingPage() {
   return (
-    <main className="h-screen flex flex-col">
+    <main className="min-h-svh flex flex-col">
       <Header />
       <section className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20 gap-6 relative">
         <div 
@@ -25,7 +25,7 @@ export default function MarketingPage() {
         </div>
       </section>
 
-      <section className="px-6 py-16 grid md:grid-cols-3 gap-6 max-w-5xl w-full mx-auto">
+      <section className="px-6 py-12 sm:py-16 grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 max-w-5xl w-full mx-auto">
         <div className="rounded-lg border p-6 bg-white">
           <h3 className="font-semibold mb-2">18きっぷ特化</h3>
           <p className="text-sm text-slate-600">在来線のみのルート生成・比較に対応。きっぷの適用期間もチェック。</p>

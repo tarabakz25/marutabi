@@ -13,7 +13,7 @@ export default async function NewTripPage() {
   return (
     <main className="w-full h-full">
       <Header />
-      <Suspense fallback={<div className="w-full h-[calc(100dvh-5rem)] flex items-center justify-center">読み込み中...</div>}>
+      <Suspense fallback={<div className="w-full min-h-[calc(100svh-8rem)] flex items-center justify-center">読み込み中...</div>}>
         <MapWithSidebar />
       </Suspense>
       <Footer />
