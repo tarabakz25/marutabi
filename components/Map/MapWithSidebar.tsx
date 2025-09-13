@@ -137,7 +137,8 @@ export default function MapWithSidebar() {
       for (const t of routeResult.transfers) if (t?.id) ids.add(t.id);
     }
     const arr = routeResult.routeStations.filter((s) => s?.id && ids.has(s.id));
-    return arr;
+    // フィルタ結果が空のときは安全に全件へフォールバック
+    return arr.length > 0 ? arr : routeResult.routeStations;
   }, [routeResult, selection]);
 
   // Prefill save title when loading a saved trip
