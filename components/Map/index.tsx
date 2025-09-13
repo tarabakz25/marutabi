@@ -21,9 +21,11 @@ export type DeckMapProps = {
   shouldResetView?: number;
 };
 
-export const Map = forwardRef<DeckMapHandle, DeckMapProps>((props, ref) => {
+export const Map = forwardRef<DeckMapHandle, DeckMapProps>(function Map(props, ref) {
   // DeckMap は forwardRef 済みなので、そのまま透過する
-  return <DeckMap ref={ref as any} {...props} />
+  return <DeckMap ref={ref as any} {...props} />;
 });
+
+Map.displayName = 'Map';
 
 export default Map;

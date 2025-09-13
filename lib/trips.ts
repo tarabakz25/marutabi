@@ -168,7 +168,16 @@ export async function listTripsByUser(userId: string): Promise<TripRecord[]> {
     return (rows ?? []).map(normalizeTripRow);
   } catch {
     const all = await readTripsFromFile();
-    return all.filter(t => t.userId === userId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const safe = all
+      .filter(t => t.userId === userId)
+      .map(t => {
+        const createdRaw: string | undefined = (t as any).createdAt ?? (t as any).created_at;
+        const updatedRaw: string | undefined = (t as any).updatedAt ?? (t as any).updated_at;
+        const createdAt = createdRaw ? new Date(createdRaw).toISOString() : new Date(0).toISOString();
+        const updatedAt = updatedRaw ? new Date(updatedRaw).toISOString() : createdAt;
+        return { ...t, createdAt, updatedAt } as TripRecord;
+      });
+    return safe.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 }
 
@@ -193,15 +202,19 @@ export async function getTripById(id: string, userId: string): Promise<TripRecor
 }
 
 function normalizeTripRow(row: any): TripRecord {
+  const createdRaw = row?.createdAt ?? row?.created_at;
+  const updatedRaw = row?.updatedAt ?? row?.updated_at;
+  const createdAt = createdRaw ? new Date(createdRaw).toISOString() : new Date().toISOString();
+  const updatedAt = updatedRaw ? new Date(updatedRaw).toISOString() : createdAt;
   return {
     id: String(row.id),
-    userId: String(row.userId ?? row.user_id ?? row.user_id),
-    title: String(row.title),
+    userId: String(row.userId ?? row.user_id),
+    title: String(row.title ?? ''),
     note: row.note ?? null,
     selection: row.selection,
     route: row.route,
-    createdAt: new Date(row.createdAt ?? row.created_at).toISOString(),
-    updatedAt: new Date(row.updatedAt ?? row.updated_at).toISOString(),
+    createdAt,
+    updatedAt,
   };
 }
 

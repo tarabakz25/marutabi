@@ -92,12 +92,20 @@ export async function evaluateRouteWithLLM(input: LLMRouteEvalInput): Promise<LL
           .slice(0, 10)
       : undefined;
 
-    const stability = parsed.stability && typeof parsed.stability === 'object'
-      ? {
-          label: ['green','yellow','red'].includes(String(parsed.stability.label)) ? parsed.stability.label as 'green'|'yellow'|'red' : undefined,
-          title: typeof parsed.stability.title === 'string' ? parsed.stability.title : undefined,
-          notes: Array.isArray(parsed.stability.notes) ? (parsed.stability.notes as any[]).filter((x) => typeof x === 'string').slice(0, 5) : undefined,
-        }
+    const stabilityRaw = parsed.stability && typeof parsed.stability === 'object' ? parsed.stability : undefined;
+    const stability = stabilityRaw
+      ? (() => {
+          const labelRaw = String(stabilityRaw.label);
+          const isValidLabel = ['green','yellow','red'].includes(labelRaw);
+          const label = (isValidLabel ? (labelRaw as 'green'|'yellow'|'red') : 'yellow');
+          const title = typeof stabilityRaw.title === 'string' && stabilityRaw.title.trim().length > 0
+            ? stabilityRaw.title
+            : (label === 'green' ? '安定' : label === 'yellow' ? '注意' : '警戒');
+          const notes = Array.isArray(stabilityRaw.notes)
+            ? (stabilityRaw.notes as any[]).filter((x) => typeof x === 'string').slice(0, 5)
+            : undefined;
+          return { label, title, notes };
+        })()
       : undefined;
     if (!comment || comment.trim().length < 3) {
       // Fallback short comment from reasons

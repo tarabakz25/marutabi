@@ -142,14 +142,24 @@ export async function listSharesByTrip(tripId: string): Promise<ShareRecord[]> {
 
 export async function listMemberUserIdsByTrip(tripId: string): Promise<string[]> {
   await ensureShareTables();
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT DISTINCT t."userId" as user_id
-     FROM "Share" s
-     JOIN "TeamMember" t ON t."shareId" = s.id
-     WHERE s."tripId" = $1`,
-    tripId,
-  );
-  return rows.map(r => String(r.user_id));
+  if (prisma) {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT DISTINCT t."userId" as user_id
+       FROM "Share" s
+       JOIN "TeamMember" t ON t."shareId" = s.id
+       WHERE s."tripId" = $1`,
+      tripId,
+    );
+    return rows.map(r => String(r.user_id));
+  }
+  // file fallback
+  const all = await readSharesFromFile();
+  const memberIds = new Set<string>();
+  const shareIds = new Set(all.shares.filter(s => s.tripId === tripId).map(s => s.id));
+  for (const m of all.members) {
+    if (shareIds.has(m.shareId)) memberIds.add(m.userId);
+  }
+  return Array.from(memberIds);
 }
 
 function normalizeShare(row: any): ShareRecord {
