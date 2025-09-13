@@ -262,6 +262,28 @@ function findNodesWithinRadius(center: Position, radiusMeters: number): string[]
   return result;
 }
 
+// 指定座標の最近傍の駅IDを返す（見つからなければnull）
+export async function findNearestStationIdFromPosition(pos: [number, number]): Promise<string | null> {
+  await initGraph();
+  const nearestNodeId = findNearestNode(pos as Position);
+  const direct = nodeStations.get(nearestNodeId) ?? [];
+  if (direct.length > 0) return direct[0] ?? null;
+  // 近傍探索で駅に紐づくノードを探す
+  const nearNodes = findNodesWithinRadius(pos as Position, 800);
+  let bestId: string | null = null;
+  let bestD = Infinity;
+  for (const nid of nearNodes) {
+    const sids = nodeStations.get(nid) ?? [];
+    for (const sid of sids) {
+      const info = stationInfo.get(sid);
+      if (!info) continue;
+      const d = haversine(pos as Position, info.position);
+      if (d < bestD) { bestD = d; bestId = sid; }
+    }
+  }
+  return bestId;
+}
+
 type CostFn = (dist: number) => number;
 
 // A* with transfer penalty (by operator/line change)

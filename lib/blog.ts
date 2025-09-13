@@ -27,7 +27,7 @@ function generateId(): string {
 export async function createComment(params: { tripId: string; userId: string; body: string }): Promise<CommentRecord> {
   const id = generateId();
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { error: insertError } = await supabase
       .from('Comment')
       .insert({ id, tripId: params.tripId, userId: params.userId, body: params.body });
@@ -50,7 +50,7 @@ export async function createComment(params: { tripId: string; userId: string; bo
 
 export async function listCommentsByTrip(tripId: string): Promise<CommentRecord[]> {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: rows, error } = await supabase
       .from('Comment')
       .select('*')
@@ -68,7 +68,7 @@ export async function listCommentsByTrip(tripId: string): Promise<CommentRecord[
 // ---- Likes ----
 export async function toggleLike(params: { tripId: string; userId: string }): Promise<{ liked: boolean; total: number }> {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     // Check existing
     const { data: existing, error: selErr } = await supabase
       .from('Like')
@@ -118,7 +118,7 @@ export async function toggleLike(params: { tripId: string; userId: string }): Pr
 
 export async function getLikeSummary(tripId: string, userId?: string): Promise<{ total: number; likedByMe: boolean }> {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: countRows, error: cntErr } = await supabase
       .from('Like')
       .select('id', { count: 'exact', head: true })

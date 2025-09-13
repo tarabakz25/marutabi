@@ -30,16 +30,14 @@ export default function EvaluatePage() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
   const [savedTripId, setSavedTripId] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState('');
+  const [qrUrl, setQrUrl] = useState('');
   const [aiRunning, setAiRunning] = useState(false);
   const [hasEvaluated, setHasEvaluated] = useState(false);
   const [userComment, setUserComment] = useState('');
   const [comments, setComments] = useState<string[]>([]);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
-  const [blogOpen, setBlogOpen] = useState(false);
-  const [blogTitle, setBlogTitle] = useState('');
-  const [blogStars, setBlogStars] = useState<number>(5);
-  const [postingBlog, setPostingBlog] = useState(false);
 
   useEffect(() => {
     try {
@@ -83,27 +81,9 @@ export default function EvaluatePage() {
     }
   };
 
-  // 簡易トースト（外部ライブラリ未導入のため）
-  const showToast = (message: string) => {
-    try {
-      // SSR 安全化
-      if (typeof window === 'undefined') return;
-      const el = document.createElement('div');
-      el.textContent = message;
-      el.style.position = 'fixed';
-      el.style.left = '50%';
-      el.style.top = '20px';
-      el.style.transform = 'translateX(-50%)';
-      el.style.zIndex = '9999';
-      el.style.background = '#16a34a';
-      el.style.color = '#fff';
-      el.style.padding = '8px 12px';
-      el.style.borderRadius = '8px';
-      el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
-      el.style.fontSize = '12px';
-      document.body.appendChild(el);
-      setTimeout(() => { try { document.body.removeChild(el); } catch {} }, 1600);
-    } catch {}
+  const copyShareUrl = async () => {
+    if (!shareUrl) return;
+    try { await navigator.clipboard.writeText(shareUrl); } catch {}
   };
 
   const handleSave = async () => {
@@ -125,65 +105,39 @@ export default function EvaluatePage() {
       }
       const data = await res.json();
       setSavedTripId(data.id);
-      showToast('保存しました！');
-      // 少し待ってから blogs に遷移
-      setTimeout(() => router.push('/blogs'), 600);
+      router.push('/trips');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const ensureTripSaved = async (): Promise<string | null> => {
-    if (savedTripId) return savedTripId;
+  const handleCreateShare = async () => {
+    if (!savedTripId) return;
     try {
-      if (!routeResult) return null;
-      const title = (saveTitle || '').trim() || '未名の旅';
-      const selection = (routeResult.routeStations && routeResult.routeStations.length >= 2)
-        ? { origin: routeResult.routeStations[0], destination: routeResult.routeStations[routeResult.routeStations.length - 1], vias: [] }
-        : { origin: null, destination: null, vias: [] } as any;
-      const routeToSave = result ? { ...routeResult, evaluation: result } : routeResult;
-      const res = await fetch('/api/trips', {
+      const res = await fetch('/api/share', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, selection, route: routeToSave }),
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      setSavedTripId(data.id);
-      return data.id as string;
-    } catch {
-      return null;
-    }
-  };
-
-  const handlePostBlog = async () => {
-    if (!routeResult) return;
-    try {
-      setPostingBlog(true);
-      const tripId = await ensureTripSaved();
-      if (!tripId) throw new Error('旅の保存に失敗しました');
-      const stars = Math.max(1, Math.min(5, Math.floor(blogStars || 5)));
-      const title = (blogTitle || '').trim() || (saveTitle || '');
-      const res = await fetch('/api/ratings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tripId, stars, comment: title, isPublic: true }),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tripId: savedTripId }),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        throw new Error(e?.error || 'ブログ投稿に失敗しました');
+        throw new Error(e?.error || '共有の作成に失敗しました');
       }
-      showToast('ブログに投稿しました！');
-      setBlogOpen(false);
-      setTimeout(() => router.push('/blogs'), 500);
+      const { share } = await res.json();
+      const origin = window.location.origin;
+      const url = `${origin}/r/${share.token}`;
+      setShareUrl(url);
+      const qr = await fetch(`/api/share?url=${encodeURIComponent(url)}`);
+      if (qr.ok) {
+        const d = await qr.json();
+        setQrUrl(d.qrUrl);
+      } else {
+        setQrUrl('');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setPostingBlog(false);
     }
   };
-
-  // 共有UIは今回削除
 
   const addUserComment = () => {
     const v = userComment.trim();
@@ -225,7 +179,12 @@ export default function EvaluatePage() {
             <div className="flex items-center gap-2">
               <Button onClick={openSave} className='bg-teal-900 hover:bg-teal-700'>ルートを保存する</Button>
               <Button variant="outline" onClick={runAiEvaluate} disabled={aiRunning || !routeResult}>
-                {aiRunning ? '確認中...' : hasEvaluated ? '再度AIで確認' : 'AIで確認'}
+                {aiRunning ? (
+                  <span className="flex items-center gap-2">
+                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
+                    確認中...
+                  </span>
+                ) : hasEvaluated ? '再度AIで確認' : 'AIで確認'}
               </Button>
               <Button variant="outline" onClick={() => router.back()}>戻る</Button>
             </div>
@@ -308,9 +267,6 @@ export default function EvaluatePage() {
                   </ul>
                 </div>
               )}
-              <div className="flex items-center justify-end">
-                <Button onClick={() => setBlogOpen(true)} className="bg-indigo-700 hover:bg-indigo-600">ブログに投稿</Button>
-              </div>
             </div>
           )}
             </div>
@@ -348,41 +304,10 @@ export default function EvaluatePage() {
             </div>
           </div>
         )}
-
-        {blogOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setBlogOpen(false)} />
-            <div className="relative z-10 bg-white rounded-lg shadow-xl w-[90%] max-w-sm p-4 space-y-3">
-              <div className="text-base font-semibold text-center">ブログに投稿</div>
-              <div className="space-y-2">
-                <div className="text-xs text-slate-600">ブログのタイトル</div>
-                <Input value={blogTitle} onChange={(e) => setBlogTitle(e.target.value)} placeholder="例: 青春18きっぷで関西周遊" />
-                <div className="text-xs text-slate-600">星（最大5）</div>
-                <select
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={blogStars}
-                  onChange={(e) => setBlogStars(Number(e.target.value))}
-                >
-                  <option value={5}>★★★★★</option>
-                  <option value={4}>★★★★☆</option>
-                  <option value={3}>★★★☆☆</option>
-                  <option value={2}>★★☆☆☆</option>
-                  <option value={1}>★☆☆☆☆</option>
-                </select>
-                <div className="flex items-center gap-2 pt-1">
-                  <Button onClick={handlePostBlog} disabled={postingBlog || !routeResult}>
-                    {postingBlog ? '投稿中...' : '投稿する'}
-                  </Button>
-                  <Button variant="outline" onClick={() => setBlogOpen(false)}>閉じる</Button>
-                </div>
-                <div className="text-[11px] text-slate-500">※ 投稿にはルートの保存が必要です（自動で保存されます）。</div>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
         </SidebarInset>
       </SidebarProvider>
     </div>
   );
 }
+

@@ -6,10 +6,33 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const origin = searchParams.get('origin');
-    const destination = searchParams.get('destination');
-    const via = searchParams.getAll('via');
+    let origin = searchParams.get('origin');
+    let destination = searchParams.get('destination');
+    let via = searchParams.getAll('via');
     const passIdsParam = searchParams.getAll('passId');
+    // 座標文字列 "lon,lat" が来た場合は最近傍駅に正規化
+    const coordRegex = /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/;
+    // 動的インポートでビルド時の静的解析エラーを回避
+    const mod = await import('@/lib/route');
+    const nearestFn: undefined | ((pos: [number, number]) => Promise<string | null>) = (mod as any).findNearestStationIdFromPosition;
+    if (origin && coordRegex.test(origin)) {
+      const [lon, lat] = origin.split(',').map((s) => Number(s));
+      const sid = nearestFn ? await nearestFn([lon, lat]) : null;
+      if (sid) origin = sid;
+    }
+    if (destination && coordRegex.test(destination)) {
+      const [lon, lat] = destination.split(',').map((s) => Number(s));
+      const sid = nearestFn ? await nearestFn([lon, lat]) : null;
+      if (sid) destination = sid;
+    }
+    if (via && via.length > 0) {
+      const mapped = await Promise.all(via.map(async (v) => {
+        if (!v || !coordRegex.test(v)) return v;
+        const [lon, lat] = v.split(',').map((s) => Number(s));
+        return nearestFn ? ((await nearestFn([lon, lat])) ?? v) : v;
+      }));
+      via = mapped;
+    }
     console.time('findRoute');
     console.log('[route] start', { origin, destination, via });
     if (!origin || !destination) {
@@ -56,12 +79,35 @@ export async function POST(req: NextRequest) {
     if (!origin && originPos) origin = `${originPos[0]},${originPos[1]}`;
     if (!destination && destPos) destination = `${destPos[0]},${destPos[1]}`;
     const viaParam = body?.via as string[] | string | undefined;
-    const via = Array.isArray(viaParam) ? viaParam : viaParam ? [viaParam] : [];
+    let via = Array.isArray(viaParam) ? viaParam : viaParam ? [viaParam] : [];
     const passIds = Array.isArray(body?.passIds)
       ? (body.passIds as string[])
       : body?.passIds
         ? [String(body.passIds)]
         : [];
+    // 座標文字列の場合は最近傍駅に正規化
+    const coordRegex = /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/;
+    const mod = await import('@/lib/route');
+    const nearestFn: undefined | ((pos: [number, number]) => Promise<string | null>) = (mod as any).findNearestStationIdFromPosition;
+    if (origin && coordRegex.test(origin)) {
+      const [lon, lat] = origin.split(',').map((s) => Number(s));
+      const sid = nearestFn ? await nearestFn([lon, lat]) : null;
+      if (sid) origin = sid;
+    }
+    if (destination && coordRegex.test(destination)) {
+      const [lon, lat] = destination.split(',').map((s) => Number(s));
+      const sid = nearestFn ? await nearestFn([lon, lat]) : null;
+      if (sid) destination = sid;
+    }
+    if (via && via.length > 0) {
+      const mapped = await Promise.all(via.map(async (v: string) => {
+        if (!v || !coordRegex.test(v)) return v;
+        const [lon, lat] = v.split(',').map((s) => Number(s));
+        return nearestFn ? ((await nearestFn([lon, lat])) ?? v) : v;
+      }));
+      via = mapped;
+    }
+
     if (!origin || !destination) {
       return NextResponse.json({ error: 'origin and destination are required' }, { status: 400 });
     }

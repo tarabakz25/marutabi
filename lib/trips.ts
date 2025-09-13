@@ -38,7 +38,7 @@ async function updateTrip(params: {
 }): Promise<TripRecord> {
   try {
     await ensureTripsTable();
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const updates: any = { updatedAt: new Date().toISOString() };
     if (typeof params.title !== 'undefined') updates.title = params.title;
     if (typeof params.note !== 'undefined') updates.note = params.note;
@@ -99,7 +99,7 @@ export async function saveTrip(params: {
     const id = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() :
       Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     await ensureTripsTable();
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { error: insertError } = await supabase
       .from('Trip')
       .insert({
@@ -158,7 +158,7 @@ export async function saveTrip(params: {
 export async function listTripsByUser(userId: string): Promise<TripRecord[]> {
   try {
     await ensureTripsTable();
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: rows, error } = await supabase
       .from('Trip')
       .select('*')
@@ -175,7 +175,7 @@ export async function listTripsByUser(userId: string): Promise<TripRecord[]> {
 export async function getTripById(id: string, userId: string): Promise<TripRecord | null> {
   try {
     await ensureTripsTable();
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: rows, error } = await supabase
       .from('Trip')
       .select('*')

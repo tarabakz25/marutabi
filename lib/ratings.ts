@@ -31,7 +31,7 @@ export async function createRating(params: {
   const stars = Math.max(1, Math.min(5, Math.floor(params.stars)));
   const id = generateId();
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { error: insertError } = await supabase
       .from('Rating')
       .insert({
@@ -71,7 +71,7 @@ export async function createRating(params: {
 export async function listPublicRatings(): Promise<RatingRecord[]> {
   try {
     await ensureRatingsTable();
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: rows, error } = await supabase
       .from('Rating')
       .select('*')
@@ -89,7 +89,7 @@ export async function listPublicRatings(): Promise<RatingRecord[]> {
 export async function listRatingsByTrip(tripId: string): Promise<RatingRecord[]> {
   try {
     await ensureRatingsTable();
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: rows, error } = await supabase
       .from('Rating')
       .select('*')
@@ -108,7 +108,7 @@ export async function listLatestRatingsForTripsByUser(tripIds: string[], userId:
   try {
     await ensureRatingsTable();
     if (!Array.isArray(tripIds) || tripIds.length === 0) return {};
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: rows, error } = await supabase
       .from('Rating')
       .select('*')

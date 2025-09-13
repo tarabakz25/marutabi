@@ -29,7 +29,12 @@ export default async function Header() {
   return (
     <div className="w-full h-20 sticky top-0 z-50 bg-white border-b flex items-center justify-between px-6">
       <div className="flex-1">
-        <Link href='/marketing' className={`text-2xl font-bold ${nanumGothicCoding.className}`}>まるたび</Link>
+        {!session?.user && (
+          <Link href='/marketing' className={`text-2xl font-bold ${nanumGothicCoding.className}`}>まるたび</Link>
+        )}
+        {session?.user && (
+          <Link href='/dashboard' className={`text-2xl font-bold ${nanumGothicCoding.className}`}>まるたび</Link>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <HeaderActions />

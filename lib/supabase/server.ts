@@ -1,13 +1,13 @@
 import { createServerClient as createSupabaseServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-export function createServerClient() {
+export async function createServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   if (!url || !anon) {
     throw new Error('SUPABASE_DISABLED');
   }
-  const cookieStore = cookies() as any;
+  const cookieStore = await cookies();
   return createSupabaseServerClient(
     url,
     anon,
