@@ -66,7 +66,7 @@ export async function loadPassCatalog(): Promise<PassCatalogItem[]> {
         const rules = normalizeRules({ include: includeOps.map((op) => ({ operator: op })), exclude });
         return { id, name, issuer, rules } as PassCatalogItem;
       })
-      .filter(Boolean);
+      .filter((v): v is PassCatalogItem => v !== null);
     cachedCatalog = items;
     return items;
   } catch {
