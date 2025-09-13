@@ -120,35 +120,50 @@ export default function EvaluatePage() {
   // 推薦取得（ルートが読み込まれたら）
   useEffect(() => {
     if (!routeResult) return;
-    const ops = routeResult?.summary?.operators ?? [];
-    const distanceTotal = routeResult?.summary?.distanceTotal ?? 0;
-    const timeTotal = routeResult?.summary?.timeTotal ?? 0;
-    const transferCount = Array.isArray(routeResult?.transfers) ? routeResult.transfers.length : 0;
-    let aborted = false;
-    setRecLoading(true);
-    setRecError(null);
-    setRecommendations(null);
-    (async () => {
-      try {
-        const res = await fetch('/api/map/passes/recommend', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ operators: ops, distanceTotal, timeTotal, transferCount }),
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        if (aborted) return;
-        const recs = Array.isArray(data?.recommendations) ? data.recommendations : [];
-        setRecommendations(recs);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (!aborted) setRecError(msg);
-      } finally {
-        if (!aborted) setRecLoading(false);
+    // セッション保存済みの推薦を復元（ルートキー一致時のみ）
+    try {
+      const saved = sessionStorage.getItem('route_pass_recommendations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const currentKey = buildEvaluationKey(routeResult);
+        if (parsed?.key === currentKey && Array.isArray(parsed?.recommendations)) {
+          setRecommendations(parsed.recommendations);
+        } else {
+          sessionStorage.removeItem('route_pass_recommendations');
+        }
       }
-    })();
-    return () => { aborted = true; };
+    } catch {}
   }, [routeResult]);
+
+  const runRecommend = async () => {
+    if (!routeResult) return;
+    try {
+      const ops = routeResult?.summary?.operators ?? [];
+      const distanceTotal = routeResult?.summary?.distanceTotal ?? 0;
+      const timeTotal = routeResult?.summary?.timeTotal ?? 0;
+      const transferCount = Array.isArray(routeResult?.transfers) ? routeResult.transfers.length : 0;
+      setRecLoading(true);
+      setRecError(null);
+      const res = await fetch('/api/map/passes/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operators: ops, distanceTotal, timeTotal, transferCount }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      const recs = Array.isArray(data?.recommendations) ? data.recommendations : [];
+      setRecommendations(recs);
+      try {
+        const key = buildEvaluationKey(routeResult);
+        sessionStorage.setItem('route_pass_recommendations', JSON.stringify({ key, recommendations: recs, savedAt: Date.now() }));
+      } catch {}
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setRecError(msg);
+    } finally {
+      setRecLoading(false);
+    }
+  };
 
   const openSave = () => { setSaveOpen(true); };
 
@@ -278,14 +293,16 @@ export default function EvaluatePage() {
             <h1 className="text-2xl font-semibold">ルートレポート</h1>
             <div className="flex items-center gap-2">
               <Button onClick={openSave} className='bg-teal-900 hover:bg-teal-700'>ルートを保存する</Button>
-              <Button variant="outline" onClick={runAiEvaluate} disabled={aiRunning || !routeResult}>
-                {aiRunning ? (
-                  <span className="flex items-center gap-2">
-                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
-                    確認中...
-                  </span>
-                ) : hasEvaluated ? '再度AIで確認' : 'AIで確認'}
-              </Button>
+              {hasEvaluated && (
+                <Button variant="outline" onClick={runAiEvaluate} disabled={aiRunning || !routeResult}>
+                  {aiRunning ? (
+                    <span className="flex items-center gap-2">
+                      <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
+                      確認中...
+                    </span>
+                  ) : '再度AIで確認'}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => router.back()}>戻る</Button>
             </div>
           </div>
@@ -293,6 +310,26 @@ export default function EvaluatePage() {
           {imageUrl && (
             <div className="w-full flex items-center justify-center">
               <img src={imageUrl} alt="route" className="max-w-full max-h-[50vh] rounded border" />
+            </div>
+          )}
+
+          {!hasEvaluated && (
+            <div className="mt-4">
+              <div className="mx-auto w-full max-w-2xl">
+                <Button
+                  onClick={runAiEvaluate}
+                  disabled={aiRunning || !routeResult}
+                  aria-label="AIでルートを確認する"
+                  className="w-full h-14 text-base md:text-lg bg-teal-700 hover:bg-teal-600"
+                >
+                  {aiRunning ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full"></div>
+                      確認中...
+                    </span>
+                  ) : 'AIで確認'}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -317,21 +354,33 @@ export default function EvaluatePage() {
               </div>
 
               {/* 簡略おすすめ（AIコメントの上） */}
-              {!loading && !error && Array.isArray(recommendations) && recommendations.length > 0 && (
-                <div className="rounded border bg-white p-4 space-y-2">
+              <div className="rounded border bg-white p-4 space-y-2">
+                <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold">おすすめフリーきっぷ（簡略）</div>
-                  <div className="text-sm text-slate-900">{recommendations[0].title}</div>
-                  {Array.isArray(recommendations[0].passIds) && recommendations[0].passIds.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {recommendations[0].passIds.map((id) => (
-                        <span key={id} className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-900">
-                          {passNameMap?.get(id) ?? id}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <Button variant="outline" size="sm" onClick={runRecommend} disabled={recLoading || !routeResult}>
+                    {Array.isArray(recommendations) && recommendations.length > 0 ? (recLoading ? '再生成中...' : '再生成') : (recLoading ? '生成中...' : 'おすすめ生成')}
+                  </Button>
                 </div>
-              )}
+                {recError && (<div className="text-xs text-red-600">{recError}</div>)}
+                {!recLoading && !recError && Array.isArray(recommendations) && recommendations.length > 0 && (
+                  <>
+                    <div className="text-sm text-slate-900">{recommendations[0].title}</div>
+                    {Array.isArray(recommendations[0].passIds) && recommendations[0].passIds.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {recommendations[0].passIds.map((id) => (
+                          <span key={id} className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-900">
+                            {passNameMap?.get(id) ?? id}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+                {recLoading && (<div className="text-xs text-slate-500">おすすめを生成中...</div>)}
+                {!recLoading && !recError && (!Array.isArray(recommendations) || recommendations.length === 0) && (
+                  <div className="text-xs text-slate-500">ボタンを押して生成します。</div>
+                )}
+              </div>
 
               {result.llm && !(result.llm as any).error && (
                 <div className="rounded border bg-white p-4 space-y-2">
@@ -430,4 +479,3 @@ export default function EvaluatePage() {
     </div>
   );
 }
-
