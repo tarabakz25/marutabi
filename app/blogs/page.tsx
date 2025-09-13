@@ -7,16 +7,78 @@ import { Card, CardContent } from '@/components/ui/card';
 
 function mockBlogs() {
   const now = Date.now();
-  return Array.from({ length: 9 }).map((_, i) => ({
+  const base = [
+    {
+      title: '週末1泊2日で巡るローカル線モデルコース',
+      excerpt: '乗り換え回数を抑えつつ、名物駅弁と温泉を両立する行程をご紹介。朝の快速の使い方がカギ。',
+      author: '編集部',
+      readingMinutes: 6,
+      tags: ['ローカル線', '行程', 'ガイド'],
+      coverImageSrc: '/space-4888643_1280.jpg',
+    },
+    {
+      title: '乗り継ぎ最適化の考え方: 5分接続は本当に得か',
+      excerpt: '遅延リスクと歩行距離、ホーム位置を定量化。余裕時間の「最適点」を事例で解説します。',
+      author: '旅人A',
+      readingMinutes: 7,
+      tags: ['乗り換え', 'ルート設計', 'Tips'],
+    },
+    {
+      title: '青春18きっぷで行く海鮮朝市: はや起きのご褒美',
+      excerpt: '始発と快速を組み合わせて朝8時到着。帰路は景色優先の鈍行で。費用と所要のバランスも掲載。',
+      author: '編集部',
+      readingMinutes: 5,
+      tags: ['青春18きっぷ', 'モデルコース'],
+    },
+    {
+      title: '雨の日の旅支度チェックリスト',
+      excerpt: '座席・窓・機材の相性で快適度が激変。防水と乾燥、カメラの結露対策まで一気に確認。',
+      author: '旅人B',
+      readingMinutes: 4,
+      tags: ['装備', 'チェックリスト'],
+      coverImageSrc: '/space-4888643_1280.jpg',
+    },
+    {
+      title: 'JR全線乗りつぶしのはじめ方',
+      excerpt: '記録方法・優先エリアの決め方・季節回し。挫折しない進め方をロードマップで共有。',
+      author: '編集部',
+      readingMinutes: 9,
+      tags: ['乗りつぶし', '計画'],
+    },
+    {
+      title: '車窓を撮る: 失敗しないシャッター設定',
+      excerpt: '反射・ブレ・トンネル。条件別にISOとSSの目安を一覧化。スマホ派にも効く小ワザつき。',
+      author: '旅人C',
+      readingMinutes: 6,
+      tags: ['撮影', 'Tips'],
+    },
+    {
+      title: '北の大地を縦断: 特急でつなぐ大移動',
+      excerpt: '長距離でも疲れにくい配席と停車駅攻略。乗継割引とホテル連携でコスト最適化。',
+      author: '編集部',
+      readingMinutes: 8,
+      tags: ['特急', '長距離'],
+      coverImageSrc: '/space-4888643_1280.jpg',
+    },
+    {
+      title: '乗換時間5分の戦略: ホーム位置を読む',
+      excerpt: '駅図・番線・編成両数から降車号車を逆算。実地検証で体感3分短縮のテクニック。',
+      author: '旅人A',
+      readingMinutes: 5,
+      tags: ['乗り換え', 'ルート設計'],
+    },
+    {
+      title: '編集後記: 今月のアップデートまとめ',
+      excerpt: '路線データの更新、ルート評価の改善、UI微調整など、開発の裏側をさらりと振り返り。',
+      author: 'Marutabi Team',
+      readingMinutes: 3,
+      tags: ['アップデート', 'プロダクト'],
+    },
+  ];
+  return base.map((b, i) => ({
     slug: `sample-${i + 1}`,
-    title: `サンプル記事タイトル ${i + 1}`,
-    excerpt:
-      'これはモックの抜粋テキストです。旅の計画や振り返り、ルート作成のコツを紹介します。',
-    author: 'Marutabi Team',
     date: new Date(now - i * 86400000).toISOString(),
-    readingMinutes: 4 + (i % 6),
-    tags: ['旅程', 'プランニング', i % 2 === 0 ? '鉄道' : 'コツ'],
-    coverImageSrc: i % 3 === 0 ? '/space-4888643_1280.jpg' : undefined,
+    ...b,
   }));
 }
 
