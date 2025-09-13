@@ -208,7 +208,7 @@ export default function EvaluatePage() {
             {routeResult && (
               <aside className="hidden lg:block lg:col-span-1 p-0 overflow-y-auto">
                 <div className="space-y-2">
-                  <h2 className="text-base font-semibold">検索結果</h2>
+                  <h2 className="text-base font-semibold">ルート詳細</h2>
                   {routeResult.summary?.passes && routeResult.summary.passes.length > 0 && (
                     <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs">
                       <div className="font-semibold text-amber-900">使用する切符</div>

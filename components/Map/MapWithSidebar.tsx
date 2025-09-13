@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Map } from "@/components/Map";
@@ -124,6 +124,20 @@ export default function MapWithSidebar() {
       }
     };
   }, []);
+
+  // ルート表示中は駅リストを 出発/経由/乗換/到着 のみに限定
+  const filteredRouteStations = useMemo(() => {
+    if (!routeResult?.routeStations) return undefined;
+    const ids = new Set<string>();
+    if (selection.origin?.id) ids.add(selection.origin.id);
+    for (const v of selection.vias) if (v?.id) ids.add(v.id);
+    if (selection.destination?.id) ids.add(selection.destination.id);
+    if (Array.isArray(routeResult.transfers)) {
+      for (const t of routeResult.transfers) if (t?.id) ids.add(t.id);
+    }
+    const arr = routeResult.routeStations.filter((s) => s?.id && ids.has(s.id));
+    return arr;
+  }, [routeResult, selection]);
 
   // Prefill save title when loading a saved trip
   useEffect(() => {
@@ -265,7 +279,7 @@ export default function MapWithSidebar() {
   };
 
   return (
-    <div className="w-full h-[calc(100dvh-5rem)] relative">
+    <div className="w-full h-[calc(100dvh-9.3rem)] relative">
       <Sidebar
         mode={mode}
         selection={selection}
@@ -285,7 +299,7 @@ export default function MapWithSidebar() {
           selected={selection} 
           routeGeojson={routeGeojson} 
           routeOperators={routeResult?.summary.operators} 
-          routeStations={routeResult?.routeStations} 
+          routeStations={filteredRouteStations} 
           flyTo={flyTo} 
           onLoadComplete={() => setMapLoaded(true)}
           shouldResetView={shouldResetView}
@@ -297,54 +311,6 @@ export default function MapWithSidebar() {
                 {p}
               </span>
             ))}
-          </div>
-        )}
-        {routeResult && (
-          <div className="absolute right-4 top-4 z-40 w-[22rem] rounded-lg border bg-white p-3 text-sm space-y-2 shadow-lg">
-            <div className="font-semibold">このルートを保存</div>
-            <input
-              value={saveTitle}
-              onChange={(e) => setSaveTitle(e.target.value)}
-              placeholder="旅のタイトル（例：春の東北縦断2日）"
-              className="w-full px-3 py-2 border rounded text-sm"
-            />
-            {saveError && <div className="text-xs text-red-600">{saveError}</div>}
-            <div className="flex gap-2">
-              <Button
-                onClick={async () => {
-                  if (!routeResult) return;
-                  const title = saveTitle.trim();
-                  if (!title) { setSaveError('タイトルを入力してください'); return; }
-                  setSaveError(null);
-                  setSaving(true);
-                  try {
-                    const selectionPayload = {
-                      origin: selection.origin,
-                      destination: selection.destination,
-                      vias: selection.vias,
-                      priority: 'optimal',
-                      passIds: Array.isArray(passIdsRef.current) ? passIdsRef.current : [],
-                    } as any;
-                    const res = await fetch('/api/trips', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ title, selection: selectionPayload, route: routeResult }),
-                    });
-                    if (!res.ok) throw new Error(await res.text());
-                    setSaveTitle('');
-                    router.push('/trips');
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setSaveError(msg);
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                disabled={saving}
-              >{saving ? '保存中...' : '保存する'}</Button>
-              <Button variant="outline" onClick={() => setSaveTitle('')}>クリア</Button>
-            </div>
-            <div className="text-xs text-slate-600">保存済みのルートは /trips で確認できます</div>
           </div>
         )}
         {error && (

@@ -336,7 +336,7 @@ export type FindRouteOptions = {
   passIds?: string[]; // 指定された切符でのみ到達可能な経路にフィルタ
 };
 
-export type TransferPoint = { id: string; position: [number, number] };
+export type TransferPoint = { id: string; position: [number, number]; seq?: number };
 
 export type RouteResult = {
   geojson: FeatureCollection<LineString>;
@@ -476,6 +476,27 @@ export async function findRoute({
       }
     }
 
+    // レグ末尾の残り区間を追加（路線が変わらずループを抜けた場合）
+    if (segStartIdx < path.length - 1) {
+      const coordsSlice = path.slice(segStartIdx).map((nid) => nodeCoords.get(nid)!) as Position[];
+      const partDist = coordsSlice.reduce((acc, cur, idx) => idx === 0 ? 0 : acc + haversine(coordsSlice[idx - 1], cur), 0);
+      features.push({
+        type: 'Feature',
+        properties: {
+          from: points[i],
+          to: points[i + 1],
+          seq: i,
+          fare: fareFromDistance(partDist),
+          time: timeFromDistance(partDist),
+          distance: partDist,
+          stationCount: countStationsInRange(segStartIdx, path.length - 1),
+          operators: operatorsArr,
+          lineName: currentLine(segStartIdx),
+        },
+        geometry: { type: 'LineString', coordinates: coordsSlice },
+      });
+    }
+
     // --- 乗換検出（Transferエッジを除外して前後の実路線が変わったノードを抽出） ---
     const getEdgeAttr = (u: string, v: string) => {
       const e = (adjacency.get(u) ?? []).find((x) => x.to === v);
@@ -524,7 +545,7 @@ export async function findRoute({
       seenTransferStations.add(stationId);
       const info = stationInfo.get(stationId);
       if (!info) continue;
-      orderedTransfersForThisLeg.push({ id: stationId, position: info.position });
+      orderedTransfersForThisLeg.push({ id: stationId, position: info.position, seq: i });
     }
     // 順序を保ってセットに投入
     for (const t of orderedTransfersForThisLeg) {

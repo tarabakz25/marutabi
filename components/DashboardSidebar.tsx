@@ -7,6 +7,14 @@ import {
 } from "@/components/ui/sidebar";
 import Link from "next/link";
 import { User, Map, FileText, Settings } from "lucide-react";
+import { Nanum_Gothic_Coding } from "next/font/google";
+
+const nanumGothicCoding = Nanum_Gothic_Coding({
+  variable: "--font-nanum-gothic-coding",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
 const sidebarItems = [
   {
     label: "Profile",
@@ -32,10 +40,10 @@ const sidebarItems = [
 
 export default function DashboardSidebar() {
   return (
-    <Sidebar>
+    <Sidebar className="bg-teal-100">
       <SidebarContent className="flex flex-col items-center">
         <SidebarHeader className="p-16">
-          <h1 className="text-2xl font-bold">まるたび</h1>
+          <h1 className={`text-3xl font-bold ${nanumGothicCoding.className}`}>まるたび</h1>
         </SidebarHeader>
         <SidebarGroupContent className="w-full p-4 list-none">
           {sidebarItems.map((item) => (

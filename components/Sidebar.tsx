@@ -71,7 +71,7 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
     return nearest;
   };
 
-  // 出発、経由、到着、乗り換えを統合したタイムラインを作成
+  // 出発、経由、到着、乗換を「区間」順に構築
   const timelineItems: Array<{
     id: string;
     name: string;
@@ -81,65 +81,77 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
     sortOrder: number;
   }> = [];
 
-  // 基本的な駅の順序を設定
+  // features の seq 単位で区間内の分割数(=推定乗換回数+1)を数える
+  const features = routeResult.geojson?.features ?? [];
+  const featuresPerSeq = new Map<number, number>();
+  for (const f of features) {
+    const seq = Number(((f as any).properties?.seq) ?? -1);
+    if (seq >= 0) featuresPerSeq.set(seq, (featuresPerSeq.get(seq) ?? 0) + 1);
+  }
+
+  // 挿入順（経路順）に並んだ transfers を各区間(seq)にマップ
+  const orderedTransfers = [...(routeResult?.transfers ?? [])];
+  const transfersBySeq = new Map<number, typeof orderedTransfers>();
+  for (const t of orderedTransfers) {
+    const seq = Number((t as any).seq);
+    if (!Number.isFinite(seq)) continue;
+    if (!transfersBySeq.has(seq)) transfersBySeq.set(seq, [] as any);
+    (transfersBySeq.get(seq) as any).push(t);
+  }
+  // seqが無いtransferのフォールバック用
+  const noSeqTransfers = orderedTransfers.filter(t => !Number.isFinite(Number((t as any).seq)));
+  let noSeqPtr = 0;
   let sortOrder = 0;
 
-  // 出発駅を追加
+  // 先頭: 出発
   if (selection.origin) {
-    timelineItems.push({
-      ...selection.origin,
-      type: 'origin',
-      sortOrder: sortOrder++
-    });
+    timelineItems.push({ ...selection.origin, type: 'origin', sortOrder: sortOrder++ });
   }
 
-  // 経由駅を追加
-  selection.vias.forEach((via, index) => {
-    timelineItems.push({
-      ...via,
-      type: 'via',
-      sortOrder: sortOrder++
-    });
-  });
-
-  // 到着駅を追加
-  if (selection.destination) {
-    timelineItems.push({
-      ...selection.destination,
-      type: 'destination',
-      sortOrder: sortOrder++
-    });
-  }
-
-  // 乗り換え駅を適切な位置に挿入
-  const transfers = routeResult?.transfers ?? [];
-  transfers.forEach(transfer => {
-    const transferInfo = getTransferInfo(transfer.id);
-    // 乗り換え駅が既存のタイムラインアイテムと重複しない場合のみ追加
-    const isDuplicate = timelineItems.some(item => item.id === transfer.id);
-    if (!isDuplicate) {
-      // 乗り換え駅を適切な位置に挿入（簡易的に最後に追加）
+  // 区間数: 経由数 + 1（出発→最初の経由、…、最終経由→到着）
+  const legCount = (selection.origin && selection.destination)
+    ? (selection.vias.length + 1)
+    : 0;
+  for (let leg = 0; leg < legCount; leg++) {
+    // まずseqに紐づく乗換を優先表示
+    const seqTransfers = transfersBySeq.get(leg) ?? [];
+    if (seqTransfers.length > 0) {
+      for (const t of seqTransfers) {
+        const info = getTransferInfo(t.id);
+        timelineItems.push({
+          id: info.id,
+          name: info.name || '乗換駅',
+          type: 'transfer',
+          position: info.position,
+          sortOrder: sortOrder++,
+        });
+      }
+    } else {
+      // seqが無ければ features から推定して不足分だけ noSeqTransfers から消費
+      const segParts = Math.max(1, featuresPerSeq.get(leg) ?? 1);
+      const transfersNeeded = Math.max(0, segParts - 1);
+      for (let k = 0; k < transfersNeeded && noSeqPtr < noSeqTransfers.length; k++) {
+        const t = noSeqTransfers[noSeqPtr++];
+        const info = getTransferInfo(t.id);
+        timelineItems.push({
+          id: info.id,
+          name: info.name || '乗換駅',
+          type: 'transfer',
+          position: info.position,
+          sortOrder: sortOrder++,
+        });
+      }
+    }
+    // 区間の終点（経由 or 到着）を追加
+    const nextStation = leg < selection.vias.length ? selection.vias[leg] : selection.destination;
+    if (nextStation) {
       timelineItems.push({
-        id: transferInfo.id,
-        name: transferInfo.name || '乗換駅',
-        type: 'transfer',
-        position: transferInfo.position,
-        sortOrder: sortOrder++
+        ...nextStation,
+        type: leg < selection.vias.length ? 'via' : 'destination',
+        sortOrder: sortOrder++,
       });
     }
-  });
-
-  // タイムラインアイテムをソート（出発→経由→乗り換え→到着の順序を維持）
-  timelineItems.sort((a, b) => {
-    // まず基本的な順序でソート
-    if (a.type === 'origin' && b.type !== 'origin') return -1;
-    if (b.type === 'origin' && a.type !== 'origin') return 1;
-    if (a.type === 'destination' && b.type !== 'destination') return 1;
-    if (b.type === 'destination' && a.type !== 'destination') return -1;
-    
-    // 同じタイプ内ではsortOrderでソート
-    return a.sortOrder - b.sortOrder;
-  });
+  }
 
   const typeLabel = (t: 'origin' | 'via' | 'destination' | 'transfer') => ({
     origin: '出発',
@@ -175,15 +187,12 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
   return (
     <div className="space-y-4">
       {timelineItems.map((item, idx) => {
-        // transfer のときは次区間に進めてから表示（乗換後の路線情報を出す）
-        if (item.type === 'transfer') {
-          segIdx = Math.min(segIdx + 1, (routeResult.geojson.features?.length ?? 1) - 1);
-        }
+        // transfer は「現在の次区間」を表示したいのでプリインクリメントせず、描画後に進める
         const featureHere = getFeatureForIndex(Math.max(0, segIdx));
         const lineName = featureHere?.properties?.lineName ?? featureHere?.properties?.operators?.join(', ') ?? '不明';
         const stationCount = featureHere?.properties?.stationCount ?? 0;
-        // 非乗換（出発/経由/到着）は表示後に区間を進める
-        if (item.type !== 'transfer') segIdx = Math.min(segIdx + 1, (routeResult.geojson.features?.length ?? 1) - 1);
+        // 表示後に区間を進める（transfer もここで進める）
+        segIdx = Math.min(segIdx + 1, (routeResult.geojson.features?.length ?? 1) - 1);
         return (
           <div key={item.id + idx} className="flex items-start gap-3">
             <div className="flex flex-col items-center">
