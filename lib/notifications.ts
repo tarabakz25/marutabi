@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { createServerClient } from '@/lib/supabase/server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -10,21 +10,7 @@ export type NotificationRecord = {
   createdAt: string;
 };
 
-async function ensureNotificationsTable(): Promise<void> {
-  try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Notification" (
-        id TEXT PRIMARY KEY,
-        "userId" TEXT NOT NULL,
-        title TEXT NOT NULL,
-        body TEXT,
-        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
-  } catch {
-    // noop
-  }
-}
+async function ensureNotificationsTable(): Promise<void> { /* Supabase側でDDL管理 */ }
 
 function generateId(): string {
   const g = (globalThis as any).crypto as any;
@@ -40,14 +26,17 @@ export async function createNotification(params: {
   const id = generateId();
   try {
     await ensureNotificationsTable();
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "Notification" (id, "userId", title, body) VALUES ($1, $2, $3, $4)`,
-      id,
-      params.userId,
-      params.title,
-      params.body ?? null,
-    );
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Notification" WHERE id = $1`, id);
+    const supabase = createServerClient();
+    const { error: insertError } = await supabase
+      .from('Notification')
+      .insert({ id, userId: params.userId, title: params.title, body: params.body ?? null });
+    if (insertError) throw insertError;
+    const { data: rows, error } = await supabase
+      .from('Notification')
+      .select('*')
+      .eq('id', id)
+      .limit(1);
+    if (error) throw error;
     const row = rows?.[0];
     return normalize(row);
   } catch {
@@ -66,11 +55,15 @@ export async function createNotification(params: {
 export async function listNotificationsByUser(userId: string): Promise<NotificationRecord[]> {
   try {
     await ensureNotificationsTable();
-    const rows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT * FROM "Notification" WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 50`,
-      userId,
-    );
-    return rows.map(normalize);
+    const supabase = createServerClient();
+    const { data: rows, error } = await supabase
+      .from('Notification')
+      .select('*')
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return (rows ?? []).map(normalize);
   } catch {
     const all = await readNotificationsFromFile();
     return all

@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { createServerClient } from '@/lib/supabase/server';
 
 export type RatingRecord = {
   id: string;
@@ -10,29 +10,7 @@ export type RatingRecord = {
   createdAt: string;
 };
 
-async function ensureRatingsTable(): Promise<void> {
-  try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Rating" (
-        id TEXT PRIMARY KEY,
-        "tripId" TEXT NOT NULL,
-        "userId" TEXT NOT NULL,
-        stars INT NOT NULL,
-        comment TEXT,
-        "isPublic" BOOLEAN NOT NULL DEFAULT FALSE,
-        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS rating_trip_idx ON "Rating" ("tripId");
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS rating_public_idx ON "Rating" ("isPublic", "createdAt");
-    `);
-  } catch {
-    // noop
-  }
-}
+async function ensureRatingsTable(): Promise<void> { /* Supabase側でDDL管理 */ }
 
 function generateId(): string {
   const g = (globalThis as any).crypto as any;
@@ -50,35 +28,51 @@ export async function createRating(params: {
   await ensureRatingsTable();
   const stars = Math.max(1, Math.min(5, Math.floor(params.stars)));
   const id = generateId();
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "Rating" (id, "tripId", "userId", stars, comment, "isPublic") VALUES ($1, $2, $3, $4, $5, $6)`,
-    id,
-    params.tripId,
-    params.userId,
-    stars,
-    params.comment ?? null,
-    Boolean(params.isPublic ?? false),
-  );
-  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Rating" WHERE id = $1`, id);
+  const supabase = createServerClient();
+  const { error: insertError } = await supabase
+    .from('Rating')
+    .insert({
+      id,
+      tripId: params.tripId,
+      userId: params.userId,
+      stars,
+      comment: params.comment ?? null,
+      isPublic: Boolean(params.isPublic ?? false),
+    });
+  if (insertError) throw insertError;
+  const { data: rows, error } = await supabase
+    .from('Rating')
+    .select('*')
+    .eq('id', id)
+    .limit(1);
+  if (error) throw error;
   const row = rows?.[0];
   return normalize(row);
 }
 
 export async function listPublicRatings(): Promise<RatingRecord[]> {
   await ensureRatingsTable();
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT * FROM "Rating" WHERE "isPublic" = TRUE ORDER BY "createdAt" DESC LIMIT 100`
-  );
-  return rows.map(normalize);
+  const supabase = createServerClient();
+  const { data: rows, error } = await supabase
+    .from('Rating')
+    .select('*')
+    .eq('isPublic', true)
+    .order('createdAt', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (rows ?? []).map(normalize);
 }
 
 export async function listRatingsByTrip(tripId: string): Promise<RatingRecord[]> {
   await ensureRatingsTable();
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT * FROM "Rating" WHERE "tripId" = $1 ORDER BY "createdAt" DESC`,
-    tripId,
-  );
-  return rows.map(normalize);
+  const supabase = createServerClient();
+  const { data: rows, error } = await supabase
+    .from('Rating')
+    .select('*')
+    .eq('tripId', tripId)
+    .order('createdAt', { ascending: false });
+  if (error) throw error;
+  return (rows ?? []).map(normalize);
 }
 
 // 最新の自己評価をトリップごとに1件ずつ返す
@@ -86,18 +80,18 @@ export async function listLatestRatingsForTripsByUser(tripIds: string[], userId:
   try {
     await ensureRatingsTable();
     if (!Array.isArray(tripIds) || tripIds.length === 0) return {};
-    const placeholders = tripIds.map((_, i) => `$${i + 2}`).join(',');
-    const sql = `
-      SELECT DISTINCT ON ("tripId") *
-      FROM "Rating"
-      WHERE "userId" = $1 AND "tripId" IN (${placeholders})
-      ORDER BY "tripId", "createdAt" DESC
-    `;
-    const rows = await prisma.$queryRawUnsafe<any[]>(sql, userId, ...tripIds);
+    const supabase = createServerClient();
+    const { data: rows, error } = await supabase
+      .from('Rating')
+      .select('*')
+      .eq('userId', userId)
+      .in('tripId', tripIds)
+      .order('createdAt', { ascending: false });
+    if (error) throw error;
     const map: Record<string, RatingRecord> = {};
-    for (const row of rows) {
+    for (const row of rows ?? []) {
       const rec = normalize(row);
-      map[rec.tripId] = rec;
+      if (!map[rec.tripId]) map[rec.tripId] = rec; // 最初（=最新）だけ
     }
     return map;
   } catch {

@@ -1,44 +1,9 @@
-import { prisma } from '@/lib/prisma';
+import { createServerClient } from '@/lib/supabase/server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
 // 生SQLでサクッと存在確認&作成（マイグレーションなしで動かすフォールバック）
-async function ensureTripsTable(): Promise<void> {
-  try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Trip" (
-        id TEXT PRIMARY KEY,
-        "userId" TEXT NOT NULL,
-        title TEXT NOT NULL,
-        note TEXT,
-        selection JSONB NOT NULL,
-        route JSONB NOT NULL,
-        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
-    // updatedAt の自動更新トリガ（存在しない環境では無視）
-    await prisma.$executeRawUnsafe(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_trip_updated_at') THEN
-          CREATE OR REPLACE FUNCTION set_trip_updated_at() RETURNS trigger AS $$
-          BEGIN
-            NEW."updatedAt" = NOW();
-            RETURN NEW;
-          END;
-          $$ LANGUAGE plpgsql;
-
-          CREATE TRIGGER trg_trip_updated_at
-          BEFORE UPDATE ON "Trip"
-          FOR EACH ROW EXECUTE PROCEDURE set_trip_updated_at();
-        END IF;
-      END $$;
-    `);
-  } catch {
-    // テーブル作成に失敗しても以降の処理で再度失敗するため握りつぶし
-  }
-}
+async function ensureTripsTable(): Promise<void> { /* Supabase側でDDL管理 */ }
 
 export type TripRecord = {
   id: string;
@@ -62,16 +27,24 @@ export async function saveTrip(params: {
     Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   try {
     await ensureTripsTable();
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "Trip" (id, "userId", title, note, selection, route) VALUES ($1, $2, $3, $4, $5, $6)`,
-      id,
-      params.userId,
-      params.title,
-      params.note ?? null,
-      params.selection,
-      params.route,
-    );
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Trip" WHERE id = $1`, id);
+    const supabase = createServerClient();
+    const { error: insertError } = await supabase
+      .from('Trip')
+      .insert({
+        id,
+        userId: params.userId,
+        title: params.title,
+        note: params.note ?? null,
+        selection: params.selection,
+        route: params.route,
+      });
+    if (insertError) throw insertError;
+    const { data: rows, error } = await supabase
+      .from('Trip')
+      .select('*')
+      .eq('id', id)
+      .limit(1);
+    if (error) throw error;
     const row = rows?.[0];
     return normalizeTripRow(row);
   } catch {
@@ -93,8 +66,14 @@ export async function saveTrip(params: {
 export async function listTripsByUser(userId: string): Promise<TripRecord[]> {
   try {
     await ensureTripsTable();
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Trip" WHERE "userId" = $1 ORDER BY "updatedAt" DESC`, userId);
-    return rows.map(normalizeTripRow);
+    const supabase = createServerClient();
+    const { data: rows, error } = await supabase
+      .from('Trip')
+      .select('*')
+      .eq('userId', userId)
+      .order('updatedAt', { ascending: false });
+    if (error) throw error;
+    return (rows ?? []).map(normalizeTripRow);
   } catch {
     const all = await readTripsFromFile();
     return all.filter(t => t.userId === userId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -104,7 +83,14 @@ export async function listTripsByUser(userId: string): Promise<TripRecord[]> {
 export async function getTripById(id: string, userId: string): Promise<TripRecord | null> {
   try {
     await ensureTripsTable();
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Trip" WHERE id = $1 AND "userId" = $2 LIMIT 1`, id, userId);
+    const supabase = createServerClient();
+    const { data: rows, error } = await supabase
+      .from('Trip')
+      .select('*')
+      .eq('id', id)
+      .eq('userId', userId)
+      .limit(1);
+    if (error) throw error;
     const row = rows?.[0];
     if (!row) return null;
     return normalizeTripRow(row);
