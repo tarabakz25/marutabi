@@ -43,6 +43,7 @@ export default function EvaluatePage() {
     try {
       const raw = sessionStorage.getItem('route_result');
       const img = sessionStorage.getItem('route_image') || '';
+      const savedTitle = sessionStorage.getItem('saved_trip_title') || '';
       if (!raw) {
         router.replace('/');
         return;
@@ -50,6 +51,10 @@ export default function EvaluatePage() {
       setImageUrl(img);
       const route = JSON.parse(raw);
       setRouteResult(route as RouteResult);
+      // 既存保存のタイトルがあればプリフィル
+      if (savedTitle) {
+        setSaveTitle(savedTitle);
+      }
     } catch (e) {
       setError('初期化に失敗しました');
     }
@@ -232,6 +237,9 @@ export default function EvaluatePage() {
                   )}
                   {(result.llm as any).comment && (
                     <div className="text-sm text-slate-700">{(result.llm as any).comment}</div>
+                  )}
+                  {routeResult?.summary?.passes && routeResult.summary.passes.length > 0 && (
+                    <div className="text-xs text-amber-900">使える切符: {routeResult.summary.passes.join('、 ')}</div>
                   )}
                   {Array.isArray((result.llm as any).stability?.notes) && ((result.llm as any).stability.notes.length > 0) && (
                     <ul className="list-disc pl-5 text-sm">

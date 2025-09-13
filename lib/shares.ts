@@ -1,6 +1,4 @@
-import { prisma } from '@/lib/prisma';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { createServerClient } from '@/lib/supabase/server';
 
 export type ShareRecord = {
   id: string;
@@ -18,35 +16,6 @@ export type TeamMemberRecord = {
   joinedAt: string;
 };
 
-async function ensureShareTables(): Promise<void> {
-  if (!prisma) return; // file fallback only
-  try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Share" (
-        id TEXT PRIMARY KEY,
-        token TEXT UNIQUE NOT NULL,
-        "tripId" TEXT NOT NULL,
-        "adminUserId" TEXT NOT NULL,
-        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "TeamMember" (
-        id TEXT PRIMARY KEY,
-        "shareId" TEXT NOT NULL,
-        "userId" TEXT NOT NULL,
-        role TEXT NOT NULL,
-        "joinedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE UNIQUE INDEX IF NOT EXISTS team_unique ON "TeamMember" ("shareId", "userId");
-    `);
-  } catch {
-    // noop
-  }
-}
-
 function generateId(): string {
   const g = (globalThis as any).crypto as any;
   if (g?.randomUUID) return g.randomUUID();
@@ -58,108 +27,111 @@ function generateToken(): string {
 }
 
 export async function createShare(tripId: string, adminUserId: string): Promise<ShareRecord> {
-  await ensureShareTables();
   const id = generateId();
   const token = generateToken();
-  if (prisma) {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "Share" (id, token, "tripId", "adminUserId") VALUES ($1, $2, $3, $4)`,
-      id,
-      token,
-      tripId,
-      adminUserId,
-    );
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Share" WHERE id = $1`, id);
-    const row = rows?.[0];
-    return normalizeShare(row);
-  }
-  const all = await readSharesFromFile();
-  const rec: ShareRecord = { id, token, tripId, adminUserId, createdAt: new Date().toISOString() };
-  all.shares.unshift(rec);
-  await writeSharesToFile(all);
-  return rec;
+  const supabase = await createServerClient();
+  const now = new Date().toISOString();
+  const { error: insertError } = await supabase
+    .from('Share')
+    .insert({ id, token, tripId, adminUserId, createdAt: now });
+  if (insertError) throw insertError;
+  const { data: rows, error } = await supabase
+    .from('Share')
+    .select('*')
+    .eq('id', id)
+    .limit(1);
+  if (error) throw error;
+  const row = rows?.[0];
+  return normalizeShare(row);
 }
 
 export async function getShareByToken(token: string): Promise<ShareRecord | null> {
-  await ensureShareTables();
-  if (prisma) {
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Share" WHERE token = $1 LIMIT 1`, token);
-    const row = rows?.[0];
-    return row ? normalizeShare(row) : null;
-  }
-  const all = await readSharesFromFile();
-  return all.shares.find(s => s.token === token) ?? null;
+  const supabase = await createServerClient();
+  const { data: rows, error } = await supabase
+    .from('Share')
+    .select('*')
+    .eq('token', token)
+    .limit(1);
+  if (error) throw error;
+  const row = rows?.[0];
+  return row ? normalizeShare(row) : null;
 }
 
 export async function addTeamMember(shareId: string, userId: string, role: 'admin' | 'member' = 'member'): Promise<TeamMemberRecord> {
-  await ensureShareTables();
-  if (prisma) {
+  const supabase = await createServerClient();
+  // upsert by unique (shareId,userId)
+  const { data: existing } = await supabase
+    .from('TeamMember')
+    .select('*')
+    .eq('shareId', shareId)
+    .eq('userId', userId)
+    .limit(1);
+  if (existing && existing.length > 0) {
+    const { error: updErr } = await supabase
+      .from('TeamMember')
+      .update({ role })
+      .eq('shareId', shareId)
+      .eq('userId', userId);
+    if (updErr) throw updErr;
+  } else {
     const id = generateId();
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "TeamMember" (id, "shareId", "userId", role) VALUES ($1, $2, $3, $4)
-       ON CONFLICT ("shareId", "userId") DO UPDATE SET role = EXCLUDED.role`,
-      id,
-      shareId,
-      userId,
-      role,
-    );
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "TeamMember" WHERE "shareId" = $1 AND "userId" = $2`, shareId, userId);
-    const row = rows?.[0];
-    return normalizeMember(row);
+    const { error: insErr } = await supabase
+      .from('TeamMember')
+      .insert({ id, shareId, userId, role });
+    if (insErr) throw insErr;
   }
-  const all = await readSharesFromFile();
-  const existing = all.members.find(m => m.shareId === shareId && m.userId === userId);
-  if (existing) {
-    existing.role = role;
-    await writeSharesToFile(all);
-    return existing;
-  }
-  const rec: TeamMemberRecord = { id: generateId(), shareId, userId, role, joinedAt: new Date().toISOString() };
-  all.members.unshift(rec);
-  await writeSharesToFile(all);
-  return rec;
+  const { data: rows, error } = await supabase
+    .from('TeamMember')
+    .select('*')
+    .eq('shareId', shareId)
+    .eq('userId', userId)
+    .limit(1);
+  if (error) throw error;
+  const row = rows?.[0];
+  return normalizeMember(row);
 }
 
 export async function listTeamMembers(shareId: string): Promise<TeamMemberRecord[]> {
-  await ensureShareTables();
-  if (prisma) {
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "TeamMember" WHERE "shareId" = $1 ORDER BY "joinedAt" DESC`, shareId);
-    return rows.map(normalizeMember);
-  }
-  const all = await readSharesFromFile();
-  return all.members.filter(m => m.shareId === shareId).sort((a, b) => b.joinedAt.localeCompare(a.joinedAt));
+  const supabase = await createServerClient();
+  const { data: rows, error } = await supabase
+    .from('TeamMember')
+    .select('*')
+    .eq('shareId', shareId)
+    .order('joinedAt', { ascending: false });
+  if (error) throw error;
+  return (rows ?? []).map(normalizeMember);
 }
 
 export async function listSharesByTrip(tripId: string): Promise<ShareRecord[]> {
-  await ensureShareTables();
-  if (prisma) {
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Share" WHERE "tripId" = $1 ORDER BY "createdAt" DESC`, tripId);
-    return rows.map(normalizeShare);
-  }
-  const all = await readSharesFromFile();
-  return all.shares.filter(s => s.tripId === tripId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const supabase = await createServerClient();
+  const { data: rows, error } = await supabase
+    .from('Share')
+    .select('*')
+    .eq('tripId', tripId)
+    .order('createdAt', { ascending: false });
+  if (error) throw error;
+  return (rows ?? []).map(normalizeShare);
 }
 
 export async function listMemberUserIdsByTrip(tripId: string): Promise<string[]> {
-  await ensureShareTables();
-  if (prisma) {
-    const rows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT DISTINCT t."userId" as user_id
-       FROM "Share" s
-       JOIN "TeamMember" t ON t."shareId" = s.id
-       WHERE s."tripId" = $1`,
-      tripId,
-    );
-    return rows.map(r => String(r.user_id));
-  }
-  // file fallback
-  const all = await readSharesFromFile();
-  const memberIds = new Set<string>();
-  const shareIds = new Set(all.shares.filter(s => s.tripId === tripId).map(s => s.id));
-  for (const m of all.members) {
-    if (shareIds.has(m.shareId)) memberIds.add(m.userId);
-  }
-  return Array.from(memberIds);
+  const supabase = await createServerClient();
+  // 1) get shares for the trip
+  const { data: shares, error: shareErr } = await supabase
+    .from('Share')
+    .select('id')
+    .eq('tripId', tripId);
+  if (shareErr) throw shareErr;
+  const shareIds = (shares ?? []).map(s => String((s as any).id));
+  if (shareIds.length === 0) return [];
+  // 2) members for these shares
+  const { data: members, error: memErr } = await supabase
+    .from('TeamMember')
+    .select('userId, shareId')
+    .in('shareId', shareIds);
+  if (memErr) throw memErr;
+  const set = new Set<string>();
+  for (const m of members ?? []) set.add(String((m as any).userId));
+  return Array.from(set);
 }
 
 function normalizeShare(row: any): ShareRecord {
@@ -181,28 +153,3 @@ function normalizeMember(row: any): TeamMemberRecord {
     joinedAt: new Date(row.joinedAt ?? row.joined_at).toISOString(),
   };
 }
-
-// ---- File fallback store ----
-type ShareFileStore = { shares: ShareRecord[]; members: TeamMemberRecord[] };
-async function sharesFilePath(): Promise<string> {
-  const dir = path.join(process.cwd(), '.data');
-  try { await fs.mkdir(dir, { recursive: true }); } catch {}
-  return path.join(dir, 'shares.json');
-}
-async function readSharesFromFile(): Promise<ShareFileStore> {
-  try {
-    const fp = await sharesFilePath();
-    const txt = await fs.readFile(fp, 'utf-8');
-    const obj = JSON.parse(txt);
-    if (obj && Array.isArray(obj.shares) && Array.isArray(obj.members)) return obj as ShareFileStore;
-    return { shares: [], members: [] };
-  } catch {
-    return { shares: [], members: [] };
-  }
-}
-async function writeSharesToFile(store: ShareFileStore): Promise<void> {
-  const fp = await sharesFilePath();
-  await fs.writeFile(fp, JSON.stringify(store, null, 2), 'utf-8');
-}
-
-

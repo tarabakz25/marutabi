@@ -9,6 +9,7 @@ import DashboardSidebar from '@/components/DashboardSidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Plus } from "lucide-react";
+import TripCard from '@/components/TripCard';
 export const metadata: Metadata = { title: '保存した旅' };
 export const dynamic = 'force-dynamic';
 
@@ -33,21 +34,7 @@ export default async function TripsListPage() {
               ) : (
                 <div className="grid sm:grid-cols-2 gap-4">
                   {trips.map((t: any) => (
-                    <Link key={t.id} href={`/trips/new?tripId=${t.id}`} className="rounded-lg border p-4 bg-white hover:shadow-sm transition">
-                      <div className="text-base font-medium mb-1">{t.title}</div>
-                      <div className="text-xs text-slate-500">更新: {new Date(t.updatedAt).toLocaleString('ja-JP')}</div>
-                      {/* rating */}
-                      {ratingMap[t.id] && (
-                        <div className="mt-2 flex items-center justify-between">
-                          <div className="text-yellow-600 text-sm">
-                            {"★".repeat(ratingMap[t.id].stars)}{"☆".repeat(5 - ratingMap[t.id].stars)}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {ratingMap[t.id].isPublic ? '公開' : '非公開'}
-                          </div>
-                        </div>
-                      )}
-                    </Link>
+                    <TripCard key={t.id} trip={{ id: t.id, title: t.title, updatedAt: t.updatedAt }} rating={ratingMap[t.id] ? { stars: ratingMap[t.id].stars, isPublic: ratingMap[t.id].isPublic } : undefined} />
                   ))}
                 </div>
               )}

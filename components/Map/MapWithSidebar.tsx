@@ -268,6 +268,14 @@ export default function MapWithSidebar() {
         try {
           img = await deckRef.current?.captureScreenshotFitRoute?.() ?? null;
         } catch {}
+        // 既存の保存済みタイトルがある場合は評価ページに引き渡す
+        try {
+          if (savedTripTitle) {
+            sessionStorage.setItem('saved_trip_title', savedTripTitle);
+          } else {
+            sessionStorage.removeItem('saved_trip_title');
+          }
+        } catch {}
         if (!img) {
           img = takeScreenshot();
         }
