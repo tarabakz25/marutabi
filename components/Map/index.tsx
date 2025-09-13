@@ -22,9 +22,8 @@ export type DeckMapProps = {
 };
 
 export const Map = forwardRef<DeckMapHandle, DeckMapProps>((props, ref) => {
-  // dynamic()の戻り値はref透過不可なので、DeckMap側でカスタムイベントも用意済み。
-  // ここではrefは透過せず、そのまま描画に留める。
-  return <DeckMap {...props} />
+  // DeckMap は forwardRef 済みなので、そのまま透過する
+  return <DeckMap ref={ref as any} {...props} />
 });
 
 export default Map;

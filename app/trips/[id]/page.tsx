@@ -2,6 +2,7 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 import { requireUser } from '@/lib/auth';
 import { getTripById } from '@/lib/trips';
+import { Suspense } from 'react';
 
 type Params = { params: { id: string } };
 
@@ -37,6 +38,9 @@ export default async function TripDetailPage({ params }: Params) {
             <div className="text-sm">経由: {selection.vias.map((v: any) => v.name).join(' / ')}</div>
           )}
         </div>
+        <Suspense>
+          <LikeAndComment tripId={trip.id} />
+        </Suspense>
         <RatingForm id={trip.id} />
       </div>
     </main>
@@ -76,6 +80,75 @@ function RatingForm({ id }: { id: string }) {
         <SubmitViaFetch />
       </div>
     </form>
+  );
+}
+
+function LikeAndComment({ tripId }: { tripId: string }) {
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `
+      (function(){
+        var root = document.currentScript.parentElement;
+        var wrap = document.createElement('div');
+        wrap.className = 'rounded-lg border p-6 bg-white space-y-4';
+        var likeRow = document.createElement('div');
+        likeRow.className = 'flex items-center gap-3';
+        var likeBtn = document.createElement('button');
+        likeBtn.type = 'button';
+        likeBtn.className = 'px-3 py-2 rounded-md border text-sm hover:bg-slate-50';
+        likeBtn.textContent = 'いいね';
+        var likeInfo = document.createElement('span');
+        likeInfo.className = 'text-sm text-slate-600';
+        likeRow.appendChild(likeBtn);
+        likeRow.appendChild(likeInfo);
+        wrap.appendChild(likeRow);
+
+        var commentForm = document.createElement('div');
+        commentForm.className = 'space-y-2';
+        var ta = document.createElement('textarea');
+        ta.rows = 3; ta.className = 'w-full border rounded px-2 py-1 text-sm';
+        ta.placeholder = 'コメントを書く';
+        var postBtn = document.createElement('button');
+        postBtn.type = 'button';
+        postBtn.className = 'inline-flex items-center px-3 py-2 rounded-md bg-slate-900 text-white text-sm';
+        postBtn.textContent = 'コメントを投稿';
+        var err = document.createElement('div');
+        err.className = 'text-xs text-red-600';
+        commentForm.appendChild(ta);
+        commentForm.appendChild(postBtn);
+        commentForm.appendChild(err);
+        wrap.appendChild(commentForm);
+
+        var list = document.createElement('div');
+        list.className = 'divide-y';
+        wrap.appendChild(list);
+
+        async function refreshLikes(){
+          try{ const res = await fetch('/api/likes?tripId=' + encodeURIComponent('${tripId}')); if(!res.ok) return; const j = await res.json(); likeInfo.textContent = '合計 ' + (j.total||0) + ' 件'; if(j.likedByMe) { likeBtn.textContent = 'いいね済み'; likeBtn.className = 'px-3 py-2 rounded-md border text-sm bg-slate-900 text-white'; } else { likeBtn.textContent = 'いいね'; likeBtn.className = 'px-3 py-2 rounded-md border text-sm hover:bg-slate-50'; } }catch{}
+        }
+        async function toggle(){
+          try{ const res = await fetch('/api/likes', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ tripId: '${tripId}' }) }); if(!res.ok){ const e = await res.json().catch(function(){return {}}); alert(e.error||'失敗しました'); return; } await refreshLikes(); }catch{}
+        }
+        async function refreshComments(){
+          try{ const res = await fetch('/api/comments?tripId=' + encodeURIComponent('${tripId}')); if(!res.ok) return; const j = await res.json(); list.innerHTML=''; (j.comments||[]).forEach(function(c){ var item = document.createElement('div'); item.className='py-3'; var body=document.createElement('div'); body.className='text-sm'; body.textContent=c.body; var meta=document.createElement('div'); meta.className='text-xs text-slate-500'; meta.textContent=new Date(c.createdAt).toLocaleString('ja-JP'); item.appendChild(body); item.appendChild(meta); list.appendChild(item); }); }catch{}
+        }
+        async function post(){
+          var v = (ta.value||'').trim();
+          if(!v){ err.textContent='コメントを入力してください'; return; }
+          err.textContent='';
+          try{ const res = await fetch('/api/comments', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ tripId: '${tripId}', body: v }) }); if(!res.ok){ const e = await res.json().catch(function(){return {}}); err.textContent = e.error || '投稿に失敗しました'; return; } ta.value=''; await refreshComments(); }catch{ err.textContent='投稿に失敗しました'; }
+        }
+
+        likeBtn.addEventListener('click', toggle);
+        postBtn.addEventListener('click', post);
+        root.appendChild(wrap);
+        refreshLikes();
+        refreshComments();
+      })();
+    `,
+      }}
+    />
   );
 }
 

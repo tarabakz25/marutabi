@@ -36,6 +36,10 @@ export default function EvaluatePage() {
   const [comments, setComments] = useState<string[]>([]);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
+  const [blogOpen, setBlogOpen] = useState(false);
+  const [blogTitle, setBlogTitle] = useState('');
+  const [blogStars, setBlogStars] = useState<number>(5);
+  const [postingBlog, setPostingBlog] = useState(false);
 
   useEffect(() => {
     try {
@@ -126,6 +130,56 @@ export default function EvaluatePage() {
       setTimeout(() => router.push('/blogs'), 600);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const ensureTripSaved = async (): Promise<string | null> => {
+    if (savedTripId) return savedTripId;
+    try {
+      if (!routeResult) return null;
+      const title = (saveTitle || '').trim() || '未名の旅';
+      const selection = (routeResult.routeStations && routeResult.routeStations.length >= 2)
+        ? { origin: routeResult.routeStations[0], destination: routeResult.routeStations[routeResult.routeStations.length - 1], vias: [] }
+        : { origin: null, destination: null, vias: [] } as any;
+      const routeToSave = result ? { ...routeResult, evaluation: result } : routeResult;
+      const res = await fetch('/api/trips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, selection, route: routeToSave }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      setSavedTripId(data.id);
+      return data.id as string;
+    } catch {
+      return null;
+    }
+  };
+
+  const handlePostBlog = async () => {
+    if (!routeResult) return;
+    try {
+      setPostingBlog(true);
+      const tripId = await ensureTripSaved();
+      if (!tripId) throw new Error('旅の保存に失敗しました');
+      const stars = Math.max(1, Math.min(5, Math.floor(blogStars || 5)));
+      const title = (blogTitle || '').trim() || (saveTitle || '');
+      const res = await fetch('/api/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tripId, stars, comment: title, isPublic: true }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e?.error || 'ブログ投稿に失敗しました');
+      }
+      showToast('ブログに投稿しました！');
+      setBlogOpen(false);
+      setTimeout(() => router.push('/blogs'), 500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPostingBlog(false);
     }
   };
 
@@ -254,6 +308,9 @@ export default function EvaluatePage() {
                   </ul>
                 </div>
               )}
+              <div className="flex items-center justify-end">
+                <Button onClick={() => setBlogOpen(true)} className="bg-indigo-700 hover:bg-indigo-600">ブログに投稿</Button>
+              </div>
             </div>
           )}
             </div>
@@ -287,6 +344,38 @@ export default function EvaluatePage() {
                   <Button onClick={handleSave} disabled={!routeResult}>保存</Button>
                   <Button variant="outline" onClick={() => setSaveOpen(false)}>閉じる</Button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {blogOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setBlogOpen(false)} />
+            <div className="relative z-10 bg-white rounded-lg shadow-xl w-[90%] max-w-sm p-4 space-y-3">
+              <div className="text-base font-semibold text-center">ブログに投稿</div>
+              <div className="space-y-2">
+                <div className="text-xs text-slate-600">ブログのタイトル</div>
+                <Input value={blogTitle} onChange={(e) => setBlogTitle(e.target.value)} placeholder="例: 青春18きっぷで関西周遊" />
+                <div className="text-xs text-slate-600">星（最大5）</div>
+                <select
+                  className="w-full border rounded px-2 py-1 text-sm"
+                  value={blogStars}
+                  onChange={(e) => setBlogStars(Number(e.target.value))}
+                >
+                  <option value={5}>★★★★★</option>
+                  <option value={4}>★★★★☆</option>
+                  <option value={3}>★★★☆☆</option>
+                  <option value={2}>★★☆☆☆</option>
+                  <option value={1}>★☆☆☆☆</option>
+                </select>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button onClick={handlePostBlog} disabled={postingBlog || !routeResult}>
+                    {postingBlog ? '投稿中...' : '投稿する'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setBlogOpen(false)}>閉じる</Button>
+                </div>
+                <div className="text-[11px] text-slate-500">※ 投稿にはルートの保存が必要です（自動で保存されます）。</div>
               </div>
             </div>
           </div>
