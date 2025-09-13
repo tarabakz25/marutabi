@@ -99,6 +99,25 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
     }
   }
 
+  // 連続する同一駅の乗換を統合（同名・同IDが続く場合は1件に圧縮）
+  const mergedItems: typeof timelineItems = [] as any;
+  for (let i = 0; i < timelineItems.length; i++) {
+    const cur = timelineItems[i];
+    const nxt = timelineItems[i + 1];
+    if (
+      cur.type === 'transfer' &&
+      nxt &&
+      nxt.type === 'transfer' &&
+      cur.id === nxt.id
+    ) {
+      // 後続はスキップ（最初の1件を残す）
+      mergedItems.push(cur);
+      i++; // 1つ余分に進める
+      continue;
+    }
+    mergedItems.push(cur);
+  }
+
   // 挿入順（経路順）に並んだ transfers を各区間(seq)にマップ
   const orderedTransfers = [...(routeResult?.transfers ?? [])];
   const transfersBySeq = new Map<number, typeof orderedTransfers>();
@@ -198,7 +217,7 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
   };
   return (
     <div className="space-y-4">
-      {timelineItems.map((item, idx) => {
+      {mergedItems.map((item, idx) => {
         const featureHere = getFeatureForIndex(item.featureIndex);
         const lineName = featureHere?.properties?.lineName ?? featureHere?.properties?.operators?.join(', ') ?? '不明';
         const stationCount = featureHere?.properties?.stationCount ?? 0;
@@ -206,7 +225,7 @@ export const RouteTimeline = ({ selection, routeResult }: { selection: SelectedS
           <div key={item.id + idx} className="flex items-start gap-3">
             <div className="flex flex-col items-center">
               <FaCircle className={`${typeColor(item.type)} w-3 h-3`} />
-              {idx !== timelineItems.length - 1 && <div className="flex-1 w-px bg-slate-300 mt-0.5" />}
+              {idx !== mergedItems.length - 1 && <div className="flex-1 w-px bg-slate-300 mt-0.5" />}
             </div>
             <div className="flex-1">
               <div className="font-medium text-sm">
@@ -437,7 +456,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="w-[22rem] fixed left-4 top-24   z-40 rounded-2xl border shadow-lg bg-white/85 backdrop-blur p-4 flex flex-col gap-4 overflow-y-auto max-h-[calc(100dvh-5rem-1rem)]">
+    <aside className="w-[22rem] fixed left-4 top-24 bottom-24 z-40 rounded-2xl border shadow-lg bg-white/85 backdrop-blur p-4 flex flex-col gap-4 overflow-y-auto">
       {!showResults && (
         <div className="space-y-2">
           <h2 className="text-base font-semibold">経路検索</h2>
@@ -727,7 +746,7 @@ export default function Sidebar({
             </>
           ) : (
             <>
-              <Button onClick={handleEvaluate} disabled={evaluating} className="w-1/2">評価する</Button>
+              <Button onClick={handleEvaluate} disabled={evaluating} className="w-1/2 bg-teal-900 hover:bg-teal-700 ">レポート作成</Button>
               <Button 
                 variant="outline" 
                 onClick={() => { 

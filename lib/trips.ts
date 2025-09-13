@@ -16,6 +16,70 @@ export type TripRecord = {
   updatedAt: string;
 };
 
+function selectionSignature(selection: any): string {
+  try {
+    const originId = String(selection?.origin?.id ?? '');
+    const destId = String(selection?.destination?.id ?? '');
+    const viaIds = Array.isArray(selection?.vias) ? selection.vias.map((v: any) => String(v?.id ?? '')) : [];
+    // passIds があれば含める（順序も含める）
+    const passIds = Array.isArray(selection?.passIds) ? selection.passIds.map((p: any) => String(p)) : [];
+    return JSON.stringify({ o: originId, d: destId, v: viaIds, p: passIds });
+  } catch {
+    return '';
+  }
+}
+
+async function updateTrip(params: {
+  id: string;
+  title?: string;
+  note?: string | null;
+  selection?: any;
+  route?: any;
+}): Promise<TripRecord> {
+  try {
+    await ensureTripsTable();
+    const supabase = createServerClient();
+    const updates: any = { updatedAt: new Date().toISOString() };
+    if (typeof params.title !== 'undefined') updates.title = params.title;
+    if (typeof params.note !== 'undefined') updates.note = params.note;
+    if (typeof params.selection !== 'undefined') updates.selection = params.selection;
+    if (typeof params.route !== 'undefined') updates.route = params.route;
+    const { error: updateError } = await supabase
+      .from('Trip')
+      .update(updates)
+      .eq('id', params.id);
+    if (updateError) throw updateError;
+    const { data: rows, error } = await supabase
+      .from('Trip')
+      .select('*')
+      .eq('id', params.id)
+      .limit(1);
+    if (error) throw error;
+    const row = rows?.[0];
+    return normalizeTripRow(row);
+  } catch {
+    // file fallback
+    const all = await readTripsFromFile();
+    const idx = all.findIndex(t => t.id === params.id);
+    if (idx >= 0) {
+      const prev = all[idx];
+      const next: TripRecord = {
+        ...prev,
+        title: typeof params.title !== 'undefined' ? String(params.title) : prev.title,
+        note: typeof params.note !== 'undefined' ? params.note : prev.note,
+        selection: typeof params.selection !== 'undefined' ? params.selection : prev.selection,
+        route: typeof params.route !== 'undefined' ? params.route : prev.route,
+        updatedAt: new Date().toISOString(),
+      };
+      all[idx] = next;
+      await writeTripsToFile(all);
+      return next;
+    }
+    // 既存がない場合はエラー
+    throw new Error('not found');
+  }
+}
+
 export async function saveTrip(params: {
   userId: string;
   title: string;
@@ -23,9 +87,17 @@ export async function saveTrip(params: {
   selection: any;
   route: any;
 }): Promise<TripRecord> {
-  const id = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() :
-    Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   try {
+    // 既存の同一 selection を検索し、あれば更新
+    const existing = await listTripsByUser(params.userId);
+    const targetSig = selectionSignature(params.selection);
+    const dup = existing.find(t => selectionSignature(t.selection) === targetSig);
+    if (dup) {
+      return await updateTrip({ id: dup.id, title: params.title, note: params.note ?? null, selection: params.selection, route: params.route });
+    }
+    // 新規作成
+    const id = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() :
+      Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     await ensureTripsTable();
     const supabase = createServerClient();
     const { error: insertError } = await supabase
@@ -48,6 +120,26 @@ export async function saveTrip(params: {
     const row = rows?.[0];
     return normalizeTripRow(row);
   } catch {
+    // file fallback: 同一 selection を探し、あれば更新、無ければ追加
+    const all = await readTripsFromFile();
+    const targetSig = selectionSignature(params.selection);
+    const idx = all.findIndex(t => selectionSignature(t.selection) === targetSig && t.userId === params.userId);
+    if (idx >= 0) {
+      const prev = all[idx];
+      const next: TripRecord = {
+        ...prev,
+        title: params.title,
+        note: params.note ?? null,
+        selection: params.selection,
+        route: params.route,
+        updatedAt: new Date().toISOString(),
+      };
+      all[idx] = next;
+      await writeTripsToFile(all);
+      return next;
+    }
+    const id = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() :
+      Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     const rec: TripRecord = {
       id,
       userId: params.userId,

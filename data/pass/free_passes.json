@@ -1,0 +1,224 @@
+[
+  {
+    "id": "seishun18",
+    "name": "青春18きっぷ",
+    "issuer": ["JR北海道","JR東日本","JR東海","JR西日本","JR四国","JR九州"],
+    "type": "free-pass",
+    "validity": {
+      "use_pattern": "連続3日 or 連続5日",
+      "seasonal": true,
+      "notes": "1枚につき1名・連続日数限定。自動改札可。"
+    },
+    "price_jpy": { "adult": { "3days": 10000, "5days": 12050 } },
+    "area_desc": "JRグループ全国の在来線（普通・快速）自由席、BRT、JR西日本宮島フェリー",
+    "operators": ["JR各社（在来線）","JR西日本宮島フェリー"],
+    "exclusions": ["新幹線・特急（オプション券を除く）","第三セクター各線"],
+    "options": [
+      {
+        "name": "青春18きっぷ北海道新幹線オプション券",
+        "desc": "新青森～木古内～五稜郭の片道1回（新幹線立席＋道南いさりび）"
+      }
+    ],
+    "sources": [
+      "https://tickets.jr-odekake.net/shohindb/view/consumer/tokutoku/detail.html?shnId=125000225",
+      "https://www.jreast.co.jp/press/2025/20250602_ho02.pdf",
+      "https://travel.watch.impress.co.jp/docs/news/2027952.html"
+    ]
+  },
+  {
+    "id": "aki_norihodai",
+    "name": "秋の乗り放題パス",
+    "issuer": ["JR北海道","JR東日本","JR東海","JR西日本","JR四国","JR九州"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "連続3日", "seasonal": true },
+    "price_jpy": { "adult": 7850, "child": 3920 },
+    "area_desc": "JR全線の在来線（普通・快速）自由席、BRT、JR西日本宮島フェリー",
+    "operators": ["JR各社（在来線）","JR西日本宮島フェリー"],
+    "exclusions": ["新幹線・特急（原則不可）","私鉄・第三セクター"],
+    "sources": [
+      "https://www.jreast.co.jp/press/2025/20250902_ho01.pdf",
+      "https://railway.jr-central.co.jp/tickets/list1.html"
+    ]
+  },
+  {
+    "id": "hokkaido_east_japan_pass",
+    "name": "北海道＆東日本パス（普通列車限定）",
+    "issuer": ["JR北海道","JR東日本"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "連続7日", "seasonal": true },
+    "price_jpy": { "adult": 11530, "child": 5760 },
+    "area_desc": "JR北海道・JR東日本全線の普通・快速自由席＋青い森鉄道・いわて銀河鉄道・北越急行の普通、JR東日本のBRT",
+    "operators": ["JR北海道","JR東日本","青い森鉄道","IGRいわて銀河鉄道","北越急行","JR東日本BRT"],
+    "exclusions": ["新幹線・特急（特例・特定特急券区間を除く）"],
+    "notes": "新函館北斗～新青森は特定特急券で北海道新幹線立席可／一部在来線特急に特例区間あり",
+    "sources": [
+      "https://www.jrhokkaido.co.jp/CM/Otoku/007138/",
+      "https://www.jreast.co.jp/tickets/info.aspx?GoodsCd=2962&pc=4",
+      "https://www.jreast.co.jp/press/2025/20250602_ho01.pdf"
+    ]
+  },
+  {
+    "id": "hokkaido_free_pass",
+    "name": "北海道フリーパス",
+    "issuer": ["JR北海道"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "連続7日", "seasonal": false, "blackout": "GW/お盆/年末年始 など設定あり" },
+    "price_jpy": { "adult": "公式ページ参照（販売方法で変動・えきねっと割引あり）" },
+    "area_desc": "JR北海道全線（在来線）特急・普通自由席、JR北海道バス（指定除く）",
+    "operators": ["JR北海道（在来線）","JR北海道バス（一部路線）"],
+    "exclusions": ["北海道新幹線"],
+    "notes": "普通車指定席は一定回数まで可（SL等除外あり）",
+    "sources": [
+      "https://www.jrhokkaido.co.jp/CM/Otoku/007120/",
+      "https://www.jrhokkaido.co.jp/cm/otoku/list.html"
+    ]
+  },
+  {
+    "id": "jr_east_norihori_suica",
+    "name": "のんびりホリデーSuicaパス",
+    "issuer": ["JR東日本"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "1日（主に土休日等の設定日）", "seasonal": false },
+    "price_jpy": { "adult": 2670, "child": 1330 },
+    "area_desc": "首都圏広域のJR在来線＋東京モノレール全線＋りんかい線全線",
+    "operators": ["JR東日本（首都圏広域）","東京モノレール","東京臨海高速鉄道（りんかい線）"],
+    "exclusions": ["新幹線不可（特急・グリーンは別途券で可）"],
+    "sources": [
+      "https://www.jreast.co.jp/tickets/info.aspx?GoodsCd=2682",
+      "https://www.jreast.co.jp/suica/ic_otoku/",
+      "https://www.jreast.co.jp/tokyo/tickets_otoku/"
+    ]
+  },
+  {
+    "id": "jr_east_holiday_odekake",
+    "name": "休日おでかけパス",
+    "issuer": ["JR東日本"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "1日（設定日）" },
+    "price_jpy": { "adult": 2720, "child": 1360 },
+    "area_desc": "首都圏広域のJR在来線＋東京モノレール全線＋りんかい線全線",
+    "operators": ["JR東日本（首都圏広域）","東京モノレール","東京臨海高速鉄道"],
+    "exclusions": ["新幹線不可（特急・グリーンは別途券で可）"],
+    "sources": [
+      "https://www.jreast.co.jp/tickets/info.aspx?GoodsCd=2490",
+      "https://www.jreast.co.jp/tokyo/tickets_otoku/"
+    ]
+  },
+  {
+    "id": "jr_east_tokunai",
+    "name": "都区内パス",
+    "issuer": ["JR東日本"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "1日（通年）" },
+    "price_jpy": { "adult": 760, "child": 380 },
+    "area_desc": "JR東日本 東京23区内の在来線（普通・快速）自由席",
+    "operators": ["JR東日本（東京23区内）"],
+    "exclusions": ["新幹線"],
+    "sources": [
+      "https://www.jreast.co.jp/tickets/info.aspx?GoodsCd=2485"
+    ]
+  },
+  {
+    "id": "jr_central_tabikippu",
+    "name": "JR東海＆16私鉄 乗り鉄☆たびきっぷ",
+    "issuer": ["JR東海", "私鉄16社局"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "連続2日（通年）" },
+    "price_jpy": { "adult": 8620, "child": 4040 },
+    "area_desc": "JR東海在来線全線＋中部エリアの16私鉄の普通・快速自由席",
+    "operators": ["JR東海（在来線）","名鉄","近鉄","静鉄","遠鉄","愛知環状鉄道","養老鉄道","伊豆急行","伊豆箱根鉄道","三岐鉄道","長良川鉄道","明知鉄道","天竜浜名湖鉄道","伊勢鉄道","四日市あすなろう鉄道","豊橋鉄道","名古屋市営地下鉄"],
+    "options": [
+      { "name": "新幹線・特急併用", "desc": "別途特急券で東海道新幹線（熱海～米原のひかり・こだま）最大4回まで利用可" }
+    ],
+    "sources": [
+      "https://railway.jr-central.co.jp/tickets/noritetsu-tabikippu/",
+      "https://railway.jr-central.co.jp/tickets/list1.html"
+    ]
+  },
+  {
+    "id": "jr_central_aozora",
+    "name": "青空フリーパス（JR東海）",
+    "issuer": ["JR東海"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "1日（原則：土休日・年末年始）" },
+    "price_jpy": { "adult": 2620, "child": 1310 },
+    "area_desc": "名古屋・三河・岐阜・三重・滋賀・長野方面のJR東海中京圏広域",
+    "operators": ["JR東海（中京エリア広域）"],
+    "exclusions": ["静岡エリアは対象外（別途『休日乗り放題きっぷ』等）"],
+    "sources": [
+      "https://railway.jr-central.co.jp/tickets/aozora-free-holiday/"
+    ]
+  },
+  {
+    "id": "jr_central_holiday",
+    "name": "休日乗り放題きっぷ（JR東海・静岡エリア）",
+    "issuer": ["JR東海"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "1日（土休日・年末年始）" },
+    "price_jpy": { "adult": 2720, "child": 1360 },
+    "area_desc": "静岡地区のJR在来線（東海道線 熱海〜豊橋、御殿場線、身延線等）",
+    "operators": ["JR東海（静岡エリア）"],
+    "sources": [
+      "https://railway.jr-central.co.jp/tickets/holiday/"
+    ]
+  },
+  {
+    "id": "jr_shikoku_free",
+    "name": "四国フリーきっぷ",
+    "issuer": ["JR四国"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "連続3日（通年）" },
+    "price_jpy": { "adult": "公式ページ参照（紙/デジタルで価格差あり）" },
+    "area_desc": "JR四国全線（特急自由席含む）",
+    "operators": ["JR四国（全線）"],
+    "notes": "デジタル版（スマえき／しこくるり／tabiwa）設定あり",
+    "sources": [
+      "https://www.jr-eki.com/ticket/brand/1-3V6",
+      "https://www.jr-eki.com/ticket/brand"
+    ]
+  },
+  {
+    "id": "jr_kyushu_tabimeijin",
+    "name": "旅名人の九州満喫きっぷ",
+    "issuer": ["JR九州"],
+    "type": "free-pass (回数型)",
+    "validity": { "use_pattern": "1日乗り放題×3回（発売日から3か月以内）" },
+    "price_jpy": { "adult": 12000 },
+    "area_desc": "JR九州の普通・快速・一部特急自由席（商品条件に従う）",
+    "operators": ["JR九州（在来線）"],
+    "exclusions": ["九州新幹線は対象外（商品条件により変動する場合あり）"],
+    "sources": [
+      "https://www.jrkyushu-kippu.jp/fare/ticket/96",
+      "https://www.jrkyushu-kippu.jp/fare/ticket/439"
+    ]
+  },
+  {
+    "id": "tokyo_metro_24h",
+    "name": "東京メトロ24時間券",
+    "issuer": ["東京地下鉄（東京メトロ）"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "使用開始から24時間（通年）" },
+    "price_jpy": { "adult": 700, "child": 350 },
+    "area_desc": "東京メトロ全9路線",
+    "operators": ["東京メトロ（銀座・丸ノ内・日比谷・東西・千代田・有楽町・半蔵門・南北・副都心）"],
+    "sources": [
+      "https://www.tokyometro.jp/ticket/value/1day/index.html",
+      "https://ssl.tokyometro.jp/support/faq_answer?faqno=OpenFAQ-000417&lang=ja",
+      "https://www.watch.impress.co.jp/docs/news/1649587.html"
+    ]
+  },
+  {
+    "id": "tokyo_subway_ticket",
+    "name": "Tokyo Subway Ticket（東京メトロ・都営地下鉄 共通）",
+    "issuer": ["東京メトロ","東京都交通局"],
+    "type": "free-pass",
+    "validity": { "use_pattern": "24/48/72時間（初回改札から）" },
+    "price_jpy": { "adult": { "24h": 800, "48h": 1200, "72h": 1500 }, "child": { "24h": 400, "48h": 600, "72h": 750 } },
+    "area_desc": "東京メトロ全線＋都営地下鉄全線",
+    "operators": ["東京メトロ","都営地下鉄"],
+    "sources": [
+      "https://www.tokyometro.jp/tst/jp/index.html",
+      "https://www.tokyometro.jp/en/ticket/travel/index.html"
+    ]
+  }
+]
