@@ -1,0 +1,48 @@
+{
+  "shares": [
+    {
+      "id": "4cea3e94-b4c9-4574-9116-f9cfb7ed671c",
+      "token": "5b2xrg6jbv006akm",
+      "tripId": "5465e720-afd0-4840-a9d3-5935d83c4552",
+      "adminUserId": "130326158",
+      "createdAt": "2025-09-13T01:43:02.468Z"
+    },
+    {
+      "id": "5ef00920-1f20-44ed-bfb0-9316ab32d149",
+      "token": "tftc0svz8crwsos3",
+      "tripId": "abeb6cfe-a82f-4716-919c-cee27b1ed2f5",
+      "adminUserId": "130326158",
+      "createdAt": "2025-09-13T01:41:08.741Z"
+    },
+    {
+      "id": "873d53e4-f7eb-4099-ae34-f4b1ac1d309b",
+      "token": "rdtxz5ydx79dgxn4",
+      "tripId": "69c0e3bb-6bf8-4224-b3a9-ad7b18f3c77c",
+      "adminUserId": "130326158",
+      "createdAt": "2025-09-13T01:40:12.265Z"
+    }
+  ],
+  "members": [
+    {
+      "id": "5901f8d0-6004-4374-a538-fba860a80e7c",
+      "shareId": "4cea3e94-b4c9-4574-9116-f9cfb7ed671c",
+      "userId": "130326158",
+      "role": "admin",
+      "joinedAt": "2025-09-13T01:43:02.468Z"
+    },
+    {
+      "id": "b94161d8-a2dc-4f5c-9b33-5962cb6f8a85",
+      "shareId": "5ef00920-1f20-44ed-bfb0-9316ab32d149",
+      "userId": "130326158",
+      "role": "admin",
+      "joinedAt": "2025-09-13T01:41:08.742Z"
+    },
+    {
+      "id": "0720a6a7-13bd-41c1-a3e9-42a524881d95",
+      "shareId": "873d53e4-f7eb-4099-ae34-f4b1ac1d309b",
+      "userId": "130326158",
+      "role": "admin",
+      "joinedAt": "2025-09-13T01:40:12.266Z"
+    }
+  ]
+}

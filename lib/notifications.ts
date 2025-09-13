@@ -26,7 +26,7 @@ export async function createNotification(params: {
   const id = generateId();
   try {
     await ensureNotificationsTable();
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { error: insertError } = await supabase
       .from('Notification')
       .insert({ id, userId: params.userId, title: params.title, body: params.body ?? null });
@@ -55,7 +55,7 @@ export async function createNotification(params: {
 export async function listNotificationsByUser(userId: string): Promise<NotificationRecord[]> {
   try {
     await ensureNotificationsTable();
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: rows, error } = await supabase
       .from('Notification')
       .select('*')

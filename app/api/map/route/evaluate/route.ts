@@ -80,11 +80,27 @@ export async function POST(req: NextRequest) {
 
     const segments = extractSegments(route);
 
-    function buildSegmentSummary(segs: SegmentInfo[]): string {
-      if (segs.length === 0) return '';
+    function extractLines(r: RouteResult): string[] {
+      try {
+        const set = new Set<string>();
+        for (const f of (r.geojson.features ?? [])) {
+          const ln = String((f.properties as any)?.lineName ?? '').trim();
+          if (ln) set.add(ln);
+        }
+        return Array.from(set);
+      } catch { return []; }
+    }
+
+    function buildSegmentSummary(segs: SegmentInfo[], lines: string[]): string {
+      if (segs.length === 0 && lines.length === 0) return '';
       const items = segs.map((s, i) => `${i + 1}) ${s.fromName} → ${s.toName} (${s.minutes}分)`).join('\n');
       const total = segs.reduce((a, b) => a + b.minutes, 0);
-      return `区間一覧(順番通り):\n${items}\n概算合計時間: ${total}分`;
+      const linesStr = lines.length ? `使用路線(順不同): ${lines.join(' / ')}` : '';
+      return [
+        linesStr,
+        segs.length ? `区間一覧(順番通り):\n${items}` : '',
+        segs.length ? `概算合計時間: ${total}分` : '',
+      ].filter(Boolean).join('\n');
     }
 
     // Try to compute accurate metrics via Ekispert per leg when possible
@@ -130,7 +146,7 @@ export async function POST(req: NextRequest) {
     let llm: any = null;
     try {
       if (process.env.OPENAI_API_KEY) {
-        const userNotes = buildSegmentSummary(segments);
+        const userNotes = buildSegmentSummary(segments, extractLines(route));
         llm = await evaluateRouteWithLLM({ ...evalInput, locale: 'ja', style: 'concise', userNotes });
         (llm as any).source = 'openai';
       } else {

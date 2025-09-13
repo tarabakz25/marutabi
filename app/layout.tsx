@@ -13,6 +13,7 @@ const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
 });
 
+
 export const metadata: Metadata = {
   title: "Marutabi",
   description: "Marutabi",
@@ -26,9 +27,13 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body
-        className={`${notoSans.className} ${notoSansJP.className} antialiased`}
+        className={`${notoSans.className} ${notoSansJP.className} antialiased min-h-dvh flex flex-col`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <div className="flex-1 flex flex-col">
+            {children}
+          </div>
+        </Providers>
       </body>
     </html>
   );

@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 
 export default function MarketingPage() {
   return (
-    <main className="min-h-screen flex flex-col">
+    <main className="h-screen flex flex-col">
       <Header />
       <section className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20 gap-6 relative">
         <div 
@@ -13,11 +14,11 @@ export default function MarketingPage() {
           }}
         />
         <div className="relative z-10 flex flex-col items-center justify-center">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">フリーきっぷ旅を、もっとかんたんに。</h1>
-          <p className="text-base md:text-lg text-slate-200 max-w-2xl mt-6">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white animate-fade-in-up">フリーきっぷ旅を、もっとかんたんに。</h1>
+          <p className="text-base md:text-lg text-slate-200 max-w-2xl mt-6 animate-fade-in-up animation-delay-200">
             旅のルートや計画を地図で作成・共有・比較。青春18きっぷや各種フリーきっぷに強い、旅行特化のプランナー。
           </p>
-          <div className="flex items-center gap-3 mt-6">
+          <div className="flex items-center gap-3 mt-6 animate-fade-in-up animation-delay-400">
             <Link href="/login" className="inline-flex items-center px-5 py-3 rounded-md bg-white text-black hover:bg-slate-100">GitHubで始める</Link>
             <Link href="/explore" className="inline-flex items-center px-5 py-3 rounded-md bg-transparent border border-white text-white hover:bg-white hover:text-black transition-colors">公開旅をみる</Link>
           </div>
@@ -38,6 +39,7 @@ export default function MarketingPage() {
           <p className="text-sm text-slate-600">海沿い/温泉/節約などのテーマで候補を自動生成（MVPはダミー）。</p>
         </div>
       </section>
+      <Footer />
     </main>
   );
 }

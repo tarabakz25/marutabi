@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from 'next/dynamic';
+import { forwardRef } from 'react';
+import type { DeckMapHandle } from './DeckMap';
 import type { SelectedStations, StationSelection } from './types';
 
 // default エクスポートを明示して解決
@@ -19,8 +21,9 @@ export type DeckMapProps = {
   shouldResetView?: number;
 };
 
-export const Map = (props: DeckMapProps) => {
-  return <DeckMap {...props} />
-}
+export const Map = forwardRef<DeckMapHandle, DeckMapProps>((props, ref) => {
+  // DeckMap は forwardRef 済みなので、そのまま透過する
+  return <DeckMap ref={ref as any} {...props} />
+});
 
 export default Map;

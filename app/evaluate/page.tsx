@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { RouteTimeline } from '@/components/Sidebar';
 import type { RouteResult } from '@/lib/route';
 import DashboardSidebar from '@/components/DashboardSidebar';
@@ -16,22 +17,27 @@ type EvalResponse = {
     transferCount: number;
     totalDistance: number;
   };
-  llm?: { reasons?: string[]; risks?: string[]; comment?: string } | { error: string };
+  llm?: { reasons?: string[]; risks?: string[]; comment?: string; stability?: { label: 'green'|'yellow'|'red'; title: string; notes?: string[] } } | { error: string };
   schedule?: { time: string; title: string; description?: string }[];
 };
 
 export default function EvaluatePage() {
   const router = useRouter();
   const [imageUrl, setImageUrl] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EvalResponse | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveTitle, setSaveTitle] = useState('');
+  const [savedTripId, setSavedTripId] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState('');
   const [qrUrl, setQrUrl] = useState('');
+  const [aiRunning, setAiRunning] = useState(false);
+  const [hasEvaluated, setHasEvaluated] = useState(false);
   const [userComment, setUserComment] = useState('');
   const [comments, setComments] = useState<string[]>([]);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+  const [urlCopied, setUrlCopied] = useState(false);
 
   useEffect(() => {
     try {
@@ -44,54 +50,93 @@ export default function EvaluatePage() {
       setImageUrl(img);
       const route = JSON.parse(raw);
       setRouteResult(route as RouteResult);
-      const run = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const res = await fetch('/api/map/route/evaluate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ route }),
-          });
-          if (!res.ok) throw new Error(await res.text());
-          const data = await res.json();
-          setResult(data);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          setError(msg);
-        } finally {
-          setLoading(false);
-        }
-      };
-      run();
     } catch (e) {
       setError('初期化に失敗しました');
-      setLoading(false);
     }
   }, [router]);
 
-  const openShare = async () => {
+  const openSave = () => { setSaveOpen(true); };
+
+  const runAiEvaluate = async () => {
+    if (!routeResult) return;
     try {
-      const token = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() : Math.random().toString(36).slice(2);
-      const origin = window.location.origin;
-      const url = `${origin}/r/${token}`;
-      setShareUrl(url);
-      const res = await fetch(`/api/share?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setQrUrl(data.qrUrl);
-      } else {
-        setQrUrl('');
-      }
-      setShareOpen(true);
-    } catch {
-      setShareOpen(true);
+      setAiRunning(true);
+      setLoading(true);
+      setError(null);
+      const res = await fetch('/api/map/route/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ route: routeResult }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setResult(data);
+      setHasEvaluated(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setAiRunning(false);
+      setLoading(false);
     }
   };
 
   const copyShareUrl = async () => {
     if (!shareUrl) return;
     try { await navigator.clipboard.writeText(shareUrl); } catch {}
+  };
+
+  const handleSave = async () => {
+    if (!routeResult) return;
+    const title = (saveTitle || '').trim() || '未名の旅';
+    const selection = (routeResult.routeStations && routeResult.routeStations.length >= 2)
+      ? { origin: routeResult.routeStations[0], destination: routeResult.routeStations[routeResult.routeStations.length - 1], vias: [] }
+      : { origin: null, destination: null, vias: [] } as any;
+    const routeToSave = result ? { ...routeResult, evaluation: result } : routeResult;
+    try {
+      const res = await fetch('/api/trips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, selection, route: routeToSave }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e?.error || '保存に失敗しました');
+      }
+      const data = await res.json();
+      setSavedTripId(data.id);
+      router.push('/trips');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleCreateShare = async () => {
+    if (!savedTripId) return;
+    try {
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tripId: savedTripId }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e?.error || '共有の作成に失敗しました');
+      }
+      const { share } = await res.json();
+      const origin = window.location.origin;
+      const url = `${origin}/r/${share.token}`;
+      setShareUrl(url);
+      const qr = await fetch(`/api/share?url=${encodeURIComponent(url)}`);
+      if (qr.ok) {
+        const d = await qr.json();
+        setQrUrl(d.qrUrl);
+      } else {
+        setQrUrl('');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const addUserComment = () => {
@@ -119,6 +164,7 @@ export default function EvaluatePage() {
       }
     : null;
 
+
   return (
     <div>
       <SidebarProvider>
@@ -129,9 +175,17 @@ export default function EvaluatePage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="space-y-4 lg:col-span-2">
           <div className="flex items-center justify-between gap-2">
-            <h1 className="text-2xl font-semibold">ルート評価</h1>
+            <h1 className="text-2xl font-semibold">ルートレポート</h1>
             <div className="flex items-center gap-2">
-              <Button onClick={openShare}>友達にシェア</Button>
+              <Button onClick={openSave} className='bg-teal-900 hover:bg-teal-700'>ルートを保存する</Button>
+              <Button variant="outline" onClick={runAiEvaluate} disabled={aiRunning || !routeResult}>
+                {aiRunning ? (
+                  <span className="flex items-center gap-2">
+                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
+                    確認中...
+                  </span>
+                ) : hasEvaluated ? '再度AIで確認' : 'AIで確認'}
+              </Button>
               <Button variant="outline" onClick={() => router.back()}>戻る</Button>
             </div>
           </div>
@@ -165,12 +219,23 @@ export default function EvaluatePage() {
               {result.llm && !(result.llm as any).error && (
                 <div className="rounded border bg-white p-4 space-y-2">
                   <div className="text-sm font-semibold">AI コメント</div>
+                  {(result.llm as any).stability && (
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const s = (result.llm as any).stability;
+                        const color = s.label === 'green' ? 'bg-green-100 text-green-800 border-green-200' : s.label === 'yellow' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-red-100 text-red-800 border-red-200';
+                        return (
+                          <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${color}`}>{s.title ?? (s.label === 'green' ? '安定' : s.label === 'yellow' ? '注意' : '警戒')}</span>
+                        );
+                      })()}
+                    </div>
+                  )}
                   {(result.llm as any).comment && (
                     <div className="text-sm text-slate-700">{(result.llm as any).comment}</div>
                   )}
-                  {Array.isArray((result.llm as any).reasons) && ((result.llm as any).reasons.length > 0) && (
+                  {Array.isArray((result.llm as any).stability?.notes) && ((result.llm as any).stability.notes.length > 0) && (
                     <ul className="list-disc pl-5 text-sm">
-                      {((result.llm as any).reasons ?? []).map((r: string, idx: number) => (
+                      {((result.llm as any).stability.notes ?? []).map((r: string, idx: number) => (
                         <li key={idx}>{r}</li>
                       ))}
                     </ul>
@@ -208,7 +273,7 @@ export default function EvaluatePage() {
             {routeResult && (
               <aside className="hidden lg:block lg:col-span-1 p-0 overflow-y-auto">
                 <div className="space-y-2">
-                  <h2 className="text-base font-semibold">検索結果</h2>
+                  <h2 className="text-base font-semibold">ルート詳細</h2>
                   {routeResult.summary?.passes && routeResult.summary.passes.length > 0 && (
                     <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs">
                       <div className="font-semibold text-amber-900">使用する切符</div>
@@ -223,22 +288,18 @@ export default function EvaluatePage() {
             )}
           </div>
         </div>
-        {shareOpen && (
+        {saveOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setShareOpen(false)} />
+            <div className="absolute inset-0 bg-black/40" onClick={() => setSaveOpen(false)} />
             <div className="relative z-10 bg-white rounded-lg shadow-xl w-[90%] max-w-sm p-4 space-y-3">
-              <div className="text-base font-semibold text-center">シェア</div>
-              <div className="text-xs break-words p-2 rounded bg-slate-50 border">{shareUrl || 'URLを生成中...'}</div>
-              {qrUrl ? (
-                <div className="flex items-center justify-center">
-                  <img src={qrUrl} alt="QR" className="w-40 h-40" />
+              <div className="text-base font-semibold text-center">ルートを保存</div>
+              <div className="space-y-2">
+                <div className="text-xs text-slate-600">保存する名前</div>
+                <Input value={saveTitle} onChange={(e) => setSaveTitle(e.target.value)} placeholder="例: 東京→大阪 最短ルート" />
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleSave} disabled={!routeResult}>保存</Button>
+                  <Button variant="outline" onClick={() => setSaveOpen(false)}>閉じる</Button>
                 </div>
-              ) : (
-                <div className="text-center text-xs text-slate-500">QRコードを生成中...</div>
-              )}
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button className="w-full sm:flex-1" onClick={copyShareUrl}>URLをコピー</Button>
-                <Button variant="outline" className="w-full sm:flex-1" onClick={() => setShareOpen(false)}>閉じる</Button>
               </div>
             </div>
           </div>

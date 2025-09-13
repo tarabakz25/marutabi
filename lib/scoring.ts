@@ -97,6 +97,11 @@ export type LLMRouteEvaluation = {
     title: string;
     description?: string;
   }[];
+  stability?: {
+    label: 'green' | 'yellow' | 'red';
+    title: string; // short headline like "安定"/"注意"/"警戒"
+    notes?: string[]; // optional bullet notes
+  };
 };
 
 export type LLMRouteEvalInput = RouteEvaluationInput & {

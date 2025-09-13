@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
         hostname: "images.pexels.com",
       },
     ],
+    domains: [
+      "avatars.githubusercontent.com",
+    ]
   },
   // Turbopackの設定（無効な設定を削除）
   turbopack: {
