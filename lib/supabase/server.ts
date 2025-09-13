@@ -3,14 +3,15 @@ import { cookies } from 'next/headers';
 
 export async function createServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!url || !anon) {
+  // サービスロールがあれば最優先（RLS回避のためサーバ側専用）
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) {
     throw new Error('SUPABASE_DISABLED');
   }
   const cookieStore = await cookies();
   return createSupabaseServerClient(
     url,
-    anon,
+    key,
     {
       cookies: {
         getAll() {

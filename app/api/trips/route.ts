@@ -10,7 +10,15 @@ export async function GET() {
     const trips = await listTripsByUser(userId);
     return NextResponse.json({ trips }, { headers: { 'content-type': 'application/json; charset=utf-8' } });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = ((): string => {
+      if (e instanceof Error) return e.message;
+      try {
+        if (e && typeof e === 'object' && 'message' in (e as any)) return String((e as any).message);
+        return JSON.stringify(e);
+      } catch {
+        return String(e);
+      }
+    })();
     const code = msg === 'Unauthorized' ? 401 : 500;
     return NextResponse.json({ error: msg || 'Failed to list trips' }, { status: code });
   }
@@ -29,7 +37,15 @@ export async function POST(req: NextRequest) {
     const saved = await saveTrip({ userId, title, note, selection, route });
     return NextResponse.json({ id: saved.id, trip: saved }, { headers: { 'content-type': 'application/json; charset=utf-8' } });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = ((): string => {
+      if (e instanceof Error) return e.message;
+      try {
+        if (e && typeof e === 'object' && 'message' in (e as any)) return String((e as any).message);
+        return JSON.stringify(e);
+      } catch {
+        return String(e);
+      }
+    })();
     const code = msg === 'Unauthorized' ? 401 : 500;
     return NextResponse.json({ error: msg || 'Failed to save trip' }, { status: code });
   }
