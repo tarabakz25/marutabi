@@ -290,6 +290,11 @@ export default function Sidebar({
   const [saveTitle, setSaveTitle] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // LLM フリーパス推薦
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
+  const [recommendations, setRecommendations] = useState<{ passIds: string[]; title: string; summary: string; reasons?: string[] }[] | null>(null);
+
   // Prefill saved title when provided
   useEffect(() => {
     if (savedTitle && !saveTitle) setSaveTitle(savedTitle);
@@ -365,6 +370,33 @@ export default function Sidebar({
       setQuery('');
       setResults([]);
       setIsEditing(false);
+
+      // 推薦の取得（右側表示用）
+      const ops = routeResult?.summary?.operators ?? [];
+      const distanceTotal = routeResult?.summary?.distanceTotal ?? 0;
+      const timeTotal = routeResult?.summary?.timeTotal ?? 0;
+      const transferCount = Array.isArray(routeResult?.transfers) ? routeResult.transfers.length : 0;
+      setRecLoading(true);
+      setRecError(null);
+      setRecommendations(null);
+      (async () => {
+        try {
+          const res = await fetch('/api/map/passes/recommend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operators: ops, distanceTotal, timeTotal, transferCount }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          const data = await res.json();
+          const recs = Array.isArray(data?.recommendations) ? data.recommendations : [];
+          setRecommendations(recs);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setRecError(msg);
+        } finally {
+          setRecLoading(false);
+        }
+      })();
     }
   }, [routeResult]);
 
@@ -675,6 +707,49 @@ export default function Sidebar({
           {evalError && (
             <div className="text-xs text-red-600">{evalError}</div>
           )}
+
+          {/* 右側推奨（このサイドバー内の下部に表示）*/}
+          <div className="mt-3 rounded border bg-white">
+            <div className="px-3 py-2 border-b text-sm font-semibold flex items-center gap-2">
+              <span className="inline-block px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 text-emerald-700 border border-emerald-200">LLM</span>
+              おすすめのフリーきっぷ
+            </div>
+            <div className="p-3 space-y-2">
+              {recLoading && (
+                <div className="text-xs text-slate-500">おすすめを生成中...</div>
+              )}
+              {recError && (
+                <div className="text-xs text-red-600">{recError}</div>
+              )}
+              {!recLoading && !recError && Array.isArray(recommendations) && recommendations.length === 0 && (
+                <div className="text-xs text-slate-500">該当するおすすめは見つかりませんでした。</div>
+              )}
+              {!recLoading && !recError && Array.isArray(recommendations) && recommendations.length > 0 && (
+                <div className="space-y-2">
+                  {recommendations.map((r, idx) => (
+                    <div key={idx} className="rounded border bg-slate-50 p-2">
+                      <div className="text-sm font-medium mb-0.5">{r.title}</div>
+                      <div className="text-xs text-slate-700 mb-1">{r.summary}</div>
+                      {Array.isArray(r.reasons) && r.reasons.length > 0 && (
+                        <ul className="list-disc pl-5 text-xs text-slate-700">
+                          {r.reasons.slice(0, 4).map((x, i) => (
+                            <li key={i}>{x}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {Array.isArray(r.passIds) && r.passIds.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {r.passIds.map((id) => (
+                            <span key={id} className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-900">{id}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

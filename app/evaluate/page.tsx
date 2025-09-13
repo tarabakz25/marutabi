@@ -21,6 +21,23 @@ type EvalResponse = {
   schedule?: { time: string; title: string; description?: string }[];
 };
 
+// 現在のルートの識別キーを生成（ルートが同じ時のみ評価を復元）
+function buildEvaluationKey(route: RouteResult): string {
+  try {
+    const stations = Array.isArray(route.routeStations) ? route.routeStations : [];
+    const originId = stations[0]?.id ?? '';
+    const destinationId = stations[stations.length - 1]?.id ?? '';
+    const featureCount = Array.isArray((route as any)?.geojson?.features) ? (route as any).geojson.features.length : 0;
+    const summary = (route as any)?.summary || {};
+    const totalFare = Math.round(Number(summary.fareTotal ?? 0));
+    const totalTime = Math.round(Number(summary.timeTotal ?? 0));
+    const totalDistance = Math.round(Number(summary.distanceTotal ?? 0));
+    return [originId, destinationId, featureCount, totalFare, totalTime, totalDistance].join('|');
+  } catch {
+    return 'unknown';
+  }
+}
+
 export default function EvaluatePage() {
   const router = useRouter();
   const [imageUrl, setImageUrl] = useState<string>('');
@@ -55,6 +72,21 @@ export default function EvaluatePage() {
       if (savedTitle) {
         setSaveTitle(savedTitle);
       }
+      // 保存済みのAI評価を復元（ルートキー一致時のみ）
+      try {
+        const saved = sessionStorage.getItem('route_evaluation');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const currentKey = buildEvaluationKey(route as RouteResult);
+          if (parsed?.key === currentKey && parsed?.result) {
+            setResult(parsed.result as EvalResponse);
+            setHasEvaluated(true);
+          } else {
+            // ルート不一致なら古い評価は破棄
+            sessionStorage.removeItem('route_evaluation');
+          }
+        }
+      } catch {}
     } catch (e) {
       setError('初期化に失敗しました');
     }
@@ -77,6 +109,11 @@ export default function EvaluatePage() {
       const data = await res.json();
       setResult(data);
       setHasEvaluated(true);
+      // セッションに評価結果を保存（同一ルートのみ復元する）
+      try {
+        const key = buildEvaluationKey(routeResult);
+        sessionStorage.setItem('route_evaluation', JSON.stringify({ key, result: data, savedAt: Date.now() }));
+      } catch {}
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
