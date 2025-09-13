@@ -48,15 +48,22 @@ function normalizeRules(raw: any): PassRules {
 export async function loadPassCatalog(): Promise<PassCatalogItem[]> {
   if (cachedCatalog) return cachedCatalog as PassCatalogItem[];
   try {
-    const passPath = path.join(process.cwd(), 'data', 'pass', 'free_passes.geojson');
-    const json = JSON.parse(await fs.readFile(passPath, 'utf-8')) as any;
-    const items: PassCatalogItem[] = (json?.features ?? [])
-      .map((f: any) => {
-        const id = String(f?.properties?.id ?? '').trim();
+    const passPath = path.join(process.cwd(), 'data', 'pass', 'free_passes.json');
+    const arr = JSON.parse(await fs.readFile(passPath, 'utf-8')) as any[];
+    const items: PassCatalogItem[] = (Array.isArray(arr) ? arr : [])
+      .map((p: any) => {
+        const id = String(p?.id ?? '').trim();
         if (!id) return null;
-        const name = String(f?.properties?.name ?? id);
-        const issuer = f?.properties?.issuer ? String(f.properties.issuer) : undefined;
-        const rules = normalizeRules(f?.properties?.rules ?? {});
+        const name = String(p?.name ?? id);
+        const issuer = Array.isArray(p?.issuer) ? (p.issuer as any[]).map(String).filter(Boolean).join('、') : (p?.issuer ? String(p.issuer) : undefined);
+        // free_passes.json には厳密な rules が無いので、operators を include として取り込む
+        const includeOps = toArray<string>(p?.operators).map((s) => String(s));
+        // 新幹線除外のヒント（exclusions に新幹線が含まれていれば exclude に設定）
+        const exclusions = toArray<string>(p?.exclusions).map((s) => String(s));
+        const exclude: PassRuleItem[] = exclusions.some((s) => s.includes('新幹線'))
+          ? [{ service: ['Shinkansen'] }]
+          : [];
+        const rules = normalizeRules({ include: includeOps.map((op) => ({ operator: op })), exclude });
         return { id, name, issuer, rules } as PassCatalogItem;
       })
       .filter(Boolean);
@@ -120,11 +127,26 @@ const OPERATOR_MAP: Record<string, (opJa: string) => boolean> = {
   'Minatomirai Line': (s) => s.includes('横浜高速鉄道') || s.includes('みなとみらい'),
 };
 
+function normalizeOpString(s: string): string {
+  try {
+    return s
+      .normalize('NFKC')
+      .replace(/株式会社/g, '')
+      .replace(/（.*?）/g, '')
+      .replace(/\s+/g, '')
+      .toLowerCase();
+  } catch {
+    return s.toLowerCase();
+  }
+}
+
 function matchOperatorByRule(opJa: string, ruleOperator?: string): boolean {
   if (!ruleOperator) return true;
   const fn = OPERATOR_MAP[ruleOperator];
   if (fn) return fn(opJa);
-  return opJa.toLowerCase().includes(ruleOperator.toLowerCase());
+  const a = normalizeOpString(opJa);
+  const b = normalizeOpString(ruleOperator);
+  return a.includes(b) || b.includes(a);
 }
 
 export async function suggestPassesForOperators(operators: string[]): Promise<string[]> {
@@ -133,7 +155,8 @@ export async function suggestPassesForOperators(operators: string[]): Promise<st
     const result: string[] = [];
     for (const p of catalog) {
       const includeOps = p.rules.include.map((i) => i.operator).filter(Boolean) as string[];
-      const coversAll = operators.every((op) => includeOps.includes(op) || (includeOps.includes('JR') && isJRLikeOperator(op)));
+      if (includeOps.length === 0) continue;
+      const coversAll = operators.every((op) => includeOps.some((rule) => matchOperatorByRule(op, rule)) || includeOps.includes('JR'));
       if (coversAll) result.push(p.name);
     }
     return result.slice(0, 10);

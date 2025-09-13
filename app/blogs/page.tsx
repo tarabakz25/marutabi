@@ -1,64 +1,79 @@
-import Link from 'next/link';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { FileText } from 'lucide-react';
+import BlogCard from '@/components/Blog/BlogCard';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
 
-async function fetchPublicRatings() {
-  try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/ratings`, { cache: 'no-store' });
-    if (!res.ok) return [] as any[];
-    return (await res.json()) as any[];
-  } catch {
-    return [] as any[];
-  }
-}
-
-async function fetchTripTitle(tripId: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/trips/${encodeURIComponent(tripId)}`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return String(data?.trip?.title ?? '') || null;
-  } catch {
-    return null;
-  }
+function mockBlogs() {
+  const now = Date.now();
+  return Array.from({ length: 9 }).map((_, i) => ({
+    slug: `sample-${i + 1}`,
+    title: `サンプル記事タイトル ${i + 1}`,
+    excerpt:
+      'これはモックの抜粋テキストです。旅の計画や振り返り、ルート作成のコツを紹介します。',
+    author: 'Marutabi Team',
+    date: new Date(now - i * 86400000).toISOString(),
+    readingMinutes: 4 + (i % 6),
+    tags: ['旅程', 'プランニング', i % 2 === 0 ? '鉄道' : 'コツ'],
+    coverImageSrc: i % 3 === 0 ? '/space-4888643_1280.jpg' : undefined,
+  }));
 }
 
 export default async function BlogPage() {
-  const ratings = await fetchPublicRatings();
-  const titles: Record<string, string | null> = Object.create(null);
-  // なるべく同時取得
-  await Promise.all(
-    ratings.map(async (r: any) => {
-      const t = await fetchTripTitle(r.tripId);
-      titles[r.tripId] = t;
-    })
-  );
+  const blogs = mockBlogs();
   return (
     <SidebarProvider>
       <DashboardSidebar />
       <SidebarInset>
-        <div className="p-12">
-          <div className="max-w-4xl space-y-6 mx-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl font-semibold">みんなの旅を見てみる</h1>
+        <div className="p-6 md:p-10">
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-6 md:mb-8">
+              <h1 className="text-2xl md:text-3xl font-semibold">ブログ</h1>
+              <p className="text-muted-foreground mt-1 text-sm">旅の作り方やプロダクトアップデートなどを紹介します</p>
             </div>
-            <div className="grid gap-4">
-              {ratings.map((r) => (
-                <Link key={r.id} href={`/trips/${encodeURIComponent(r.tripId)}`} className="rounded-lg border p-4 bg-white block hover:bg-slate-50">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-900 line-clamp-1">{titles[r.tripId] ?? '旅のタイトル（取得中）'}</div>
-                      {r.comment && <div className="text-sm mt-1 text-slate-700 line-clamp-2">{r.comment}</div>}
-                    </div>
-                    <div className="text-yellow-600 text-sm whitespace-nowrap">{'★'.repeat(r.stars)}{'☆'.repeat(5 - r.stars)}</div>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-2">{new Date(r.createdAt).toLocaleString('ja-JP')}</div>
-                </Link>
+
+            <div className="mb-6 grid gap-3 sm:grid-cols-[1fr_auto]">
+              <Input placeholder="記事を検索" aria-label="記事を検索" />
+              <Select defaultValue="all" aria-label="タグで絞り込み">
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="タグで絞り込み" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべてのタグ</SelectItem>
+                  <SelectItem value="plan">プランニング</SelectItem>
+                  <SelectItem value="rail">鉄道</SelectItem>
+                  <SelectItem value="tips">コツ</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {blogs.map((b) => (
+                <BlogCard key={b.slug} {...b} />
               ))}
-              {ratings.length === 0 && (
-                <div className="rounded-lg border p-6 text-sm text-slate-600 bg-white">まだ公開された評価はありません。</div>
-              )}
+            </div>
+
+            <div className="mt-8 flex items-center justify-center gap-2">
+              <button className="h-9 rounded-md border px-3 text-sm text-foreground hover:bg-muted/40 disabled:opacity-50" disabled>
+                前へ
+              </button>
+              <div className="text-sm text-muted-foreground">1 / 3</div>
+              <button className="h-9 rounded-md border px-3 text-sm text-foreground hover:bg-muted/40">次へ</button>
+            </div>
+
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i} className="animate-pulse overflow-hidden">
+                  <div className="bg-muted w-full h-40" />
+                  <CardContent className="pb-6">
+                    <div className="mt-4 h-5 w-3/4 bg-muted rounded" />
+                    <div className="mt-2 h-4 w-full bg-muted rounded" />
+                    <div className="mt-2 h-4 w-2/3 bg-muted rounded" />
+                    <div className="mt-4 h-4 w-1/3 bg-muted rounded" />
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         </div>
