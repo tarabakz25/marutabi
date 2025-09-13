@@ -56,6 +56,12 @@ export default function EvaluatePage() {
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
 
+  // LLM フリーパス推薦（簡略表示用）
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
+  const [recommendations, setRecommendations] = useState<{ passIds: string[]; title: string; summary?: string; reasons?: string[] }[] | null>(null);
+  const [passNameMap, setPassNameMap] = useState<Map<string, string> | null>(null);
+
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('route_result');
@@ -91,6 +97,58 @@ export default function EvaluatePage() {
       setError('初期化に失敗しました');
     }
   }, [router]);
+
+  // パス名称マップ取得
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/map/passes', { cache: 'force-cache' });
+        if (!res.ok) return;
+        const list = await res.json();
+        if (aborted) return;
+        const m = new Map<string, string>();
+        (Array.isArray(list) ? list : []).forEach((it: any) => {
+          if (it && typeof it.id === 'string') m.set(it.id, typeof it.name === 'string' ? it.name : it.id);
+        });
+        setPassNameMap(m);
+      } catch {}
+    })();
+    return () => { aborted = true; };
+  }, []);
+
+  // 推薦取得（ルートが読み込まれたら）
+  useEffect(() => {
+    if (!routeResult) return;
+    const ops = routeResult?.summary?.operators ?? [];
+    const distanceTotal = routeResult?.summary?.distanceTotal ?? 0;
+    const timeTotal = routeResult?.summary?.timeTotal ?? 0;
+    const transferCount = Array.isArray(routeResult?.transfers) ? routeResult.transfers.length : 0;
+    let aborted = false;
+    setRecLoading(true);
+    setRecError(null);
+    setRecommendations(null);
+    (async () => {
+      try {
+        const res = await fetch('/api/map/passes/recommend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operators: ops, distanceTotal, timeTotal, transferCount }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        if (aborted) return;
+        const recs = Array.isArray(data?.recommendations) ? data.recommendations : [];
+        setRecommendations(recs);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!aborted) setRecError(msg);
+      } finally {
+        if (!aborted) setRecLoading(false);
+      }
+    })();
+    return () => { aborted = true; };
+  }, [routeResult]);
 
   const openSave = () => { setSaveOpen(true); };
 
@@ -257,6 +315,23 @@ export default function EvaluatePage() {
                   <div className="text-3xl font-bold">{fmtFare(result.metrics.totalFare)}</div>
                 </div>
               </div>
+
+              {/* 簡略おすすめ（AIコメントの上） */}
+              {!loading && !error && Array.isArray(recommendations) && recommendations.length > 0 && (
+                <div className="rounded border bg-white p-4 space-y-2">
+                  <div className="text-sm font-semibold">おすすめフリーきっぷ（簡略）</div>
+                  <div className="text-sm text-slate-900">{recommendations[0].title}</div>
+                  {Array.isArray(recommendations[0].passIds) && recommendations[0].passIds.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {recommendations[0].passIds.map((id) => (
+                        <span key={id} className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-900">
+                          {passNameMap?.get(id) ?? id}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {result.llm && !(result.llm as any).error && (
                 <div className="rounded border bg-white p-4 space-y-2">
