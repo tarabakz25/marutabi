@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
-import HeaderActions from "@/components/HeaderActions";
+// 簡素化: 検索/通知等のアクションは撤去
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -29,15 +29,9 @@ export default async function Header() {
   return (
     <div className="w-full h-14 sm:h-16 md:h-20 sticky top-0 z-50 bg-white border-b flex items-center justify-between px-4 sm:px-6">
       <div className="flex-1">
-        {!session?.user && (
-          <Link href='/marketing' className={`text-2xl font-bold ${nanumGothicCoding.className}`}>まるたび</Link>
-        )}
-        {session?.user && (
-          <Link href='/dashboard' className={`text-2xl font-bold ${nanumGothicCoding.className}`}>まるたび</Link>
-        )}
+        <Link href='/' className={`text-2xl font-bold ${nanumGothicCoding.className}`}>まるたび</Link>
       </div>
       <div className="flex items-center gap-3">
-        <HeaderActions />
         {!session?.user && (
           <Link href="/login" className="inline-flex items-center px-3 py-1.5 rounded-lg border hover:bg-slate-50">Login</Link>
         )}
@@ -52,24 +46,12 @@ export default async function Header() {
                 )}
               </Avatar>
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side="bottom"
-              align="start"
-              alignOffset={-100}
-            >
+            <DropdownMenuContent side="bottom" align="end">
               <DropdownMenuLabel>{userName}</DropdownMenuLabel>
-              <DropdownMenuGroup>
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard">Profile</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/settings">Settings</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/logout">Logout</Link>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/api/auth/signout">Logout</Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}

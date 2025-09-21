@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Map } from "@/components/Map";
 import type { DeckMapHandle } from "@/components/Map/DeckMap";
@@ -17,7 +17,6 @@ type StationSearchResult = {
 };
 
 export default function MapWithSidebar() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<SelectionMode>("origin");
   const [selection, setSelection] = useState<SelectedStations>({
@@ -63,11 +62,7 @@ export default function MapWithSidebar() {
   const [error, setError] = useState<string | null>(null);
   const [searchToken, setSearchToken] = useState<number>(0);
   const passIdsRef = useRef<string[] | null>(null);
-  const [savedTripTitle, setSavedTripTitle] = useState<string>('');
   const [shouldResetView, setShouldResetView] = useState<number>(0);
-  const [saving, setSaving] = useState(false);
-  const [saveTitle, setSaveTitle] = useState<string>('');
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSearch = () => {
     // selection should contain at least origin & destination
@@ -87,7 +82,6 @@ export default function MapWithSidebar() {
         const data = await res.json();
         const trip = data?.trip;
         if (!trip || aborted) return;
-        setSavedTripTitle(String(trip.title ?? ''));
         const sel = trip.selection ?? {};
         const route = trip.route;
         // selection を反映
@@ -139,11 +133,6 @@ export default function MapWithSidebar() {
     const arr = routeResult.routeStations.filter((s) => s?.id && ids.has(s.id));
     return arr;
   }, [routeResult, selection]);
-
-  // Prefill save title when loading a saved trip
-  useEffect(() => {
-    if (savedTripTitle && !saveTitle) setSaveTitle(savedTripTitle);
-  }, [savedTripTitle, saveTitle]);
 
   useEffect(() => {
     const points: StationSelection[] = [];
@@ -260,35 +249,7 @@ export default function MapWithSidebar() {
     }
   };
 
-  const handleEvaluateNavigate = (route: RouteResult) => {
-    try {
-      // 可能ならDeckのfit後スクショを優先
-      const doNext = async () => {
-        let img: string | null = null;
-        try {
-          img = await deckRef.current?.captureScreenshotFitRoute?.() ?? null;
-        } catch {}
-        // 既存の保存済みタイトルがある場合は評価ページに引き渡す
-        try {
-          if (savedTripTitle) {
-            sessionStorage.setItem('saved_trip_title', savedTripTitle);
-          } else {
-            sessionStorage.removeItem('saved_trip_title');
-          }
-        } catch {}
-        if (!img) {
-          img = takeScreenshot();
-        }
-        sessionStorage.setItem('route_result', JSON.stringify(route));
-        if (img) sessionStorage.setItem('route_image', img);
-        router.push('/evaluate');
-      };
-      // 非同期に進める
-      void doNext();
-    } catch {
-      router.push('/evaluate');
-    }
-  };
+  // 評価ページ遷移は廃止
 
   // 検索結果から戻るときに駅表示とズームを初期化し固定
   const handleBackFromResults = () => {
@@ -310,8 +271,6 @@ export default function MapWithSidebar() {
         onSearch={handleSearch}
         routeResult={routeResult}
         onStationSelected={handleStationSelectedFromSearch}
-        onEvaluateNavigate={handleEvaluateNavigate}
-        savedTitle={savedTripTitle}
         onBackFromResults={handleBackFromResults}
       />
       <div className="absolute inset-0" ref={containerRef}>

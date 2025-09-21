@@ -1,11 +1,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { SelectionMode, SelectedStations } from "@/components/Map/types";
 import type { RouteResult } from "@/lib/route";
 import { FaCircle, FaPlus, FaTimes } from "react-icons/fa";
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { Separator } from "@/components/ui/separator";
 
 type StationSearchResult = {
@@ -258,12 +258,9 @@ export default function Sidebar({
   onSearch,
   routeResult,
   onStationSelected,
-  onEvaluateNavigate,
-  savedTitle,
   onBackFromResults,
-}: Props & { onStationSelected: (s: StationSearchResult) => void; onEvaluateNavigate?: (route: RouteResult) => void; savedTitle?: string }) {
+}: Props & { onStationSelected: (s: StationSearchResult) => void }) {
 
-  const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<StationSearchResult[]>([]);
   const [activeInput, setActiveInput] = useState<'origin' | 'destination' | number | null>(null);
@@ -273,13 +270,6 @@ export default function Sidebar({
     destinationId: undefined,
     viaIds: [],
   });
-  const [evaluating, setEvaluating] = useState(false);
-  const [evalResult, setEvalResult] = useState<{
-    composite?: { score: number; breakdown: { timeScore: number; fareScore: number; transferScore: number; distanceScore: number } };
-    llm?: { score?: number; reasons?: string[]; risks?: string[]; comment?: string } | { error: string };
-  } | null>(null);
-  const [evalError, setEvalError] = useState<string | null>(null);
-  const [showEvalView, setShowEvalView] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string>('');
   const [qrUrl, setQrUrl] = useState<string>('');
@@ -287,18 +277,10 @@ export default function Sidebar({
   const [selectedPassIds, setSelectedPassIds] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // LLM フリーパス推薦
-  const [recLoading, setRecLoading] = useState(false);
-  const [recError, setRecError] = useState<string | null>(null);
-  const [recommendations, setRecommendations] = useState<{ passIds: string[]; title: string; summary: string; reasons?: string[] }[] | null>(null);
-
-  // Prefill saved title when provided
-  useEffect(() => {
-    if (savedTitle && !saveTitle) setSaveTitle(savedTitle);
-  }, [savedTitle]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -370,33 +352,6 @@ export default function Sidebar({
       setQuery('');
       setResults([]);
       setIsEditing(false);
-
-      // 推薦の取得（右側表示用）
-      const ops = routeResult?.summary?.operators ?? [];
-      const distanceTotal = routeResult?.summary?.distanceTotal ?? 0;
-      const timeTotal = routeResult?.summary?.timeTotal ?? 0;
-      const transferCount = Array.isArray(routeResult?.transfers) ? routeResult.transfers.length : 0;
-      setRecLoading(true);
-      setRecError(null);
-      setRecommendations(null);
-      (async () => {
-        try {
-          const res = await fetch('/api/map/passes/recommend', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ operators: ops, distanceTotal, timeTotal, transferCount }),
-          });
-          if (!res.ok) throw new Error(await res.text());
-          const data = await res.json();
-          const recs = Array.isArray(data?.recommendations) ? data.recommendations : [];
-          setRecommendations(recs);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          setRecError(msg);
-        } finally {
-          setRecLoading(false);
-        }
-      })();
     }
   }, [routeResult]);
 
@@ -433,15 +388,35 @@ export default function Sidebar({
     setIsEditing(false);
   };
 
-  const handleEvaluate = async () => {
+  // 保存処理
+  const handleSave = async () => {
     if (!routeResult) return;
-    // ページ遷移で行うため、ここでは遷移用コールバックのみ
-    setQuery('');
-    setResults([]);
-    setShowEvalView(false);
-    setEvalResult(null);
-    setEvalError(null);
-    onEvaluateNavigate?.(routeResult);
+    const title = (saveTitle || '').trim() || '未名の旅';
+    const selectionToSave: any = {
+      origin: selection.origin ?? null,
+      destination: selection.destination ?? null,
+      vias: Array.isArray(selection.vias) ? selection.vias : [],
+      passIds: selectedPassIds,
+    };
+    const routeToSave: any = routeResult;
+    try {
+      setSaving(true);
+      setSaveError(null);
+      const res = await fetch('/api/trips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, selection: selectionToSave, route: routeToSave }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e?.error || '保存に失敗しました');
+      }
+      setSaveOpen(false);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openShare = async () => {
@@ -691,8 +666,8 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* 検索結果 / 評価ビュー */}
-      {routeResult && showResults && !showEvalView && (
+      {/* 検索結果 */}
+      {routeResult && showResults && (
         <div className="space-y-2 mt-4 overflow-y-auto flex-1 pr-1">
           <h3 className="text-base font-semibold">検索結果</h3>
           {routeResult.summary?.passes && routeResult.summary.passes.length > 0 && (
@@ -704,93 +679,11 @@ export default function Sidebar({
             </div>
           )}
           <RouteTimeline selection={selection} routeResult={routeResult} />
-          {evalError && (
-            <div className="text-xs text-red-600">{evalError}</div>
-          )}
-
-          {/* 右側推奨（このサイドバー内の下部に表示）*/}
-          <div className="mt-3 rounded border bg-white">
-            <div className="px-3 py-2 border-b text-sm font-semibold flex items-center gap-2">
-              <span className="inline-block px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 text-emerald-700 border border-emerald-200">LLM</span>
-              おすすめのフリーきっぷ
-            </div>
-            <div className="p-3 space-y-2">
-              {recLoading && (
-                <div className="text-xs text-slate-500">おすすめを生成中...</div>
-              )}
-              {recError && (
-                <div className="text-xs text-red-600">{recError}</div>
-              )}
-              {!recLoading && !recError && Array.isArray(recommendations) && recommendations.length === 0 && (
-                <div className="text-xs text-slate-500">該当するおすすめは見つかりませんでした。</div>
-              )}
-              {!recLoading && !recError && Array.isArray(recommendations) && recommendations.length > 0 && (
-                <div className="space-y-2">
-                  {recommendations.map((r, idx) => (
-                    <div key={idx} className="rounded border bg-slate-50 p-2">
-                      <div className="text-sm font-medium mb-0.5">{r.title}</div>
-                      <div className="text-xs text-slate-700 mb-1">{r.summary}</div>
-                      {Array.isArray(r.reasons) && r.reasons.length > 0 && (
-                        <ul className="list-disc pl-5 text-xs text-slate-700">
-                          {r.reasons.slice(0, 4).map((x, i) => (
-                            <li key={i}>{x}</li>
-                          ))}
-                        </ul>
-                      )}
-                      {Array.isArray(r.passIds) && r.passIds.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {r.passIds.map((id) => (
-                            <span key={id} className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-900">{id}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {routeResult && showEvalView && (
-        <div className="space-y-2 mt-4 overflow-y-auto flex-1 pr-1">
-          <h3 className="text-base font-semibold">評価結果</h3>
-          {evalResult?.composite && (
-            <div className="rounded border bg-white p-3 text-sm space-y-2">
-              <div className="text-base font-semibold">合成スコア: {evalResult.composite.score}</div>
-              <div className="grid grid-cols-2 gap-1 text-xs">
-                <div>時間: {evalResult.composite.breakdown.timeScore}</div>
-                <div>運賃: {evalResult.composite.breakdown.fareScore}</div>
-                <div>乗換: {evalResult.composite.breakdown.transferScore}</div>
-                <div>距離: {evalResult.composite.breakdown.distanceScore}</div>
-              </div>
-            </div>
-          )}
-          {evalResult?.llm && !(evalResult.llm as any).error && (
-            <div className="rounded border bg-white p-3 text-sm space-y-2">
-              <div className="text-sm font-semibold">LLM スコア: {(evalResult.llm as any).score ?? '—'}</div>
-              {(evalResult.llm as any).comment && (
-                <div className="text-xs text-slate-700">{(evalResult.llm as any).comment}</div>
-              )}
-              {Array.isArray((evalResult.llm as any).reasons) && (
-                <ul className="list-disc pl-5 text-xs">
-                  {((evalResult.llm as any).reasons ?? []).map((r: string, idx: number) => (
-                    <li key={idx}>{r}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          {evalError && (
-            <div className="text-xs text-red-600">{evalError}</div>
-          )}
         </div>
       )}
 
       <div className="flex gap-2">
-        {!showEvalView ? (
-          !showResults ? (
+        {!showResults ? (
             <>
               <Button onClick={() => {
                 if (typeof window !== 'undefined') {
@@ -802,23 +695,18 @@ export default function Sidebar({
             </>
           ) : (
             <>
-              <Button onClick={handleEvaluate} disabled={evaluating} className="w-1/2 bg-teal-900 hover:bg-teal-700 ">レポート作成</Button>
+              <Button onClick={() => setSaveOpen(true)} className="w-1/3 bg-teal-900 hover:bg-teal-700">保存</Button>
+              <Button onClick={openShare} className="w-1/3">シェア</Button>
               <Button 
                 variant="outline" 
                 onClick={() => { 
                   try { onBackFromResults?.(); } catch {}
                   setShowResults(false); 
                 }} 
-                className="w-1/2"
+                className="w-1/3"
               >戻る</Button>
             </>
-          )
-        ) : (
-          <>
-            <Button onClick={openShare} className="w-full">友達にシェア</Button>
-            <Button variant="outline" onClick={() => setShowEvalView(false)} className="w-full">戻る</Button>
-          </>
-        )}
+          )}
       </div>
 
 
@@ -838,6 +726,24 @@ export default function Sidebar({
             <div className="flex gap-2">
               <Button className="w-full" onClick={copyShareUrl}>URLをコピー</Button>
               <Button variant="outline" className="w-full" onClick={() => setShareOpen(false)}>閉じる</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saveOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSaveOpen(false)} />
+          <div className="relative z-10 bg-white rounded-lg shadow-xl w-[90%] max-w-sm p-4 space-y-3">
+            <div className="text-base font-semibold text-center">ルートを保存</div>
+            <div className="space-y-2">
+              <div className="text-xs text-slate-600">保存する名前</div>
+              <Input value={saveTitle} onChange={(e) => setSaveTitle(e.target.value)} placeholder="例: 東京→大阪 最短ルート" />
+              {saveError && (<div className="text-xs text-red-600">{saveError}</div>)}
+              <div className="flex items-center gap-2">
+                <Button onClick={handleSave} disabled={!routeResult || saving}>{saving ? '保存中...' : '保存'}</Button>
+                <Button variant="outline" onClick={() => setSaveOpen(false)}>閉じる</Button>
+              </div>
             </div>
           </div>
         </div>

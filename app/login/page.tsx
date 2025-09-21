@@ -20,7 +20,7 @@ export default function Login() {
             <Button 
               onClick={() => {
                 console.log('GitHub login button clicked');
-                signIn("github", { callbackUrl: '/dashboard' });
+                signIn("github", { callbackUrl: '/' });
               }} 
               className="w-full h-12 text-base font-medium"
               variant="outline"
