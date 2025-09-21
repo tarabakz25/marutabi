@@ -1,19 +1,9 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
 // 簡素化: 検索/通知等のアクションは撤去
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Nanum_Gothic_Coding } from "next/font/google";
+import UserMenuClient from "@/components/UserMenuClient";
 
 const nanumGothicCoding = Nanum_Gothic_Coding({
   subsets: ["latin"],
@@ -36,24 +26,7 @@ export default async function Header() {
           <Link href="/login" className="inline-flex items-center px-3 py-1.5 rounded-lg border hover:bg-slate-50">Login</Link>
         )}
         {session?.user && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Avatar className="size-10">
-                {userImage ? (
-                  <AvatarImage src={userImage} alt={userName ?? "user"} />
-                ) : (
-                  <AvatarFallback>{fallbackInitial}</AvatarFallback>
-                )}
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="bottom" align="end">
-              <DropdownMenuLabel>{userName}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/api/auth/signout">Logout</Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <UserMenuClient userName={userName} userImage={userImage} />
         )}
       </div>
     </div>

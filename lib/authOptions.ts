@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
-import Github from "next-auth/providers/github";
+import Cognito from "next-auth/providers/cognito";
+import Google from "next-auth/providers/google";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -7,9 +8,16 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   providers: [
-    Github({
-      clientId: process.env.GITHUB_ID!,
-      clientSecret: process.env.GITHUB_SECRET!,
+    // Google 直接認証（Cognito連携ではなく単独で利用したい場合のみ有効化）
+    // Google({
+    //   clientId: process.env.GOOGLE_CLIENT_ID!,
+    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    // }),
+    // Cognito (Google フェデレーションをCognito側で構成している前提)
+    Cognito({
+      clientId: process.env.COGNITO_CLIENT_ID!,
+      clientSecret: process.env.COGNITO_CLIENT_SECRET!,
+      issuer: process.env.COGNITO_ISSUER!,
     }),
   ],
   callbacks: {

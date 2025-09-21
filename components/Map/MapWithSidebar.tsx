@@ -7,6 +7,8 @@ import { Map } from "@/components/Map";
 import type { DeckMapHandle } from "@/components/Map/DeckMap";
 import { Button } from "@/components/ui/button";
 import type { SelectedStations, StationSelection, SelectionMode } from "./types";
+import dynamic from 'next/dynamic';
+const SaveCurrentRouteButton = dynamic(() => import('./SaveCurrentRouteButton'), { ssr: false });
 import type { RouteResult } from "@/lib/route";
 type StationSearchResult = {
   id: string;
@@ -262,6 +264,14 @@ export default function MapWithSidebar() {
 
   return (
     <div className="w-full min-h-[calc(100svh-8rem)] sm:min-h-[calc(100svh-9.5rem)] relative">
+      {/* 右上に保存ボタン（検索結果がある時のみ有効） */}
+      <div className="absolute top-2 right-2 z-40">
+        <SaveCurrentRouteButton 
+          selection={selection} 
+          routeResult={routeResult} 
+          passIdsRef={passIdsRef}
+        />
+      </div>
       <Sidebar
         mode={mode}
         selection={selection}

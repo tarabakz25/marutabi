@@ -1,6 +1,8 @@
 import { createServerClient } from '@/lib/supabase/server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { DynamoDBClient, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
 export type NotificationRecord = {
   id: string;
@@ -24,6 +26,29 @@ export async function createNotification(params: {
   body?: string;
 }): Promise<NotificationRecord> {
   const id = generateId();
+  const createdAt = new Date().toISOString();
+  // 1) DynamoDB
+  const ddb = getDdb();
+  if (ddb) {
+    try {
+      const item = {
+        userId: params.userId,
+        createdAt,
+        id,
+        title: params.title,
+        body: params.body ?? null,
+      };
+      await ddb.send(new PutItemCommand({
+        TableName: table(),
+        Item: marshall(item, { removeUndefinedValues: true }),
+      }));
+      return { id, userId: params.userId, title: params.title, body: params.body ?? null, createdAt };
+    } catch {
+      // fallback to Supabase
+    }
+  }
+
+  // 2) Supabase
   try {
     await ensureNotificationsTable();
     const supabase = await createServerClient();
@@ -40,19 +65,34 @@ export async function createNotification(params: {
     const row = rows?.[0];
     return normalize(row);
   } catch {
-    const rec: NotificationRecord = {
-      id,
-      userId: params.userId,
-      title: params.title,
-      body: params.body ?? null,
-      createdAt: new Date().toISOString(),
-    };
+    // 3) File fallback
+    const rec: NotificationRecord = { id, userId: params.userId, title: params.title, body: params.body ?? null, createdAt };
     await saveNotificationToFile(rec);
     return rec;
   }
 }
 
 export async function listNotificationsByUser(userId: string): Promise<NotificationRecord[]> {
+  // 1) DynamoDB
+  const ddb = getDdb();
+  if (ddb) {
+    try {
+      const res = await ddb.send(new QueryCommand({
+        TableName: table(),
+        KeyConditionExpression: '#pk = :uid',
+        ExpressionAttributeNames: { '#pk': 'userId' },
+        ExpressionAttributeValues: marshall({ ':uid': userId }),
+        Limit: 50,
+        ScanIndexForward: false,
+      }));
+      const items = (res.Items ?? []).map((it) => unmarshall(it));
+      return items.map((row: any) => normalize(row));
+    } catch {
+      // fallback to Supabase
+    }
+  }
+
+  // 2) Supabase
   try {
     await ensureNotificationsTable();
     const supabase = await createServerClient();
@@ -65,6 +105,7 @@ export async function listNotificationsByUser(userId: string): Promise<Notificat
     if (error) throw error;
     return (rows ?? []).map(normalize);
   } catch {
+    // 3) File fallback
     const all = await readNotificationsFromFile();
     return all
       .filter(n => n.userId === userId)
@@ -113,5 +154,19 @@ async function saveNotificationToFile(rec: NotificationRecord): Promise<void> {
   all.unshift(rec);
   await writeNotificationsToFile(all);
 }
+
+// ---- DDB utils ----
+function getDdb(): DynamoDBClient | null {
+  try {
+    if (process.env.AWS_REGION && process.env.NOTIFICATIONS_TABLE) {
+      return new DynamoDBClient({});
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const table = () => process.env.NOTIFICATIONS_TABLE as string;
 
 
