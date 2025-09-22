@@ -4,9 +4,15 @@ applications:
       phases:
         preBuild:
           commands:
+            - curl -fsSL https://bun.sh/install | bash
+            - export BUN_INSTALL="$HOME/.bun"
+            - export PATH="$BUN_INSTALL/bin:$PATH"
+            - bun --version
             - bun install
         build:
           commands:
+            - export BUN_INSTALL="$HOME/.bun"
+            - export PATH="$BUN_INSTALL/bin:$PATH"
             - bun run build
       artifacts:
         baseDirectory: .next
