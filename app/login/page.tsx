@@ -13,10 +13,20 @@ export default function Login() {
     (async () => {
       try {
         const p = await getProviders();
-        setProviders(p as Providers);
-      } catch {
-        setProviders({});
-      }
+        if (p) { setProviders(p as Providers); return; }
+      } catch {}
+      try {
+        const res = await fetch('/api/public/providers', { cache: 'no-store' });
+        if (res.ok) {
+          const j = await res.json();
+          const fallback: Providers = {} as any;
+          if (j.google) fallback['google'] = { id: 'google', name: 'Google' } as any;
+          if (j.cognito) fallback['cognito'] = { id: 'cognito', name: 'Cognito' } as any;
+          setProviders(fallback);
+          return;
+        }
+      } catch {}
+      setProviders({});
     })();
   }, []);
   return (
