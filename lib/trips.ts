@@ -1,4 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { DynamoDBClient, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
 // 生SQLでサクッと存在確認&作成（マイグレーションなしで動かすフォールバック）
 async function ensureTripsTable(): Promise<void> { /* Supabase側でDDL管理 */ }
@@ -63,6 +65,52 @@ export async function saveTrip(params: {
   selection: any;
   route: any;
 }): Promise<TripRecord> {
+  const ddb = getTripsDdb();
+  if (ddb) {
+    try {
+      const now = new Date().toISOString();
+      const existing = await listTripsByUser(params.userId);
+      const targetSig = selectionSignature(params.selection);
+      const dup = existing.find(t => selectionSignature(t.selection) === targetSig);
+      if (dup) {
+        const item = {
+          id: dup.id,
+          userId: params.userId,
+          title: params.title,
+          note: params.note ?? null,
+          selection: params.selection,
+          route: params.route,
+          createdAt: dup.createdAt,
+          updatedAt: now,
+        };
+        await ddb.send(new PutItemCommand({
+          TableName: tripsTable(),
+          Item: marshall(item, { removeUndefinedValues: true }),
+        }));
+        return item as TripRecord;
+      }
+      const id = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() :
+        Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const item = {
+        id,
+        userId: params.userId,
+        title: params.title,
+        note: params.note ?? null,
+        selection: params.selection,
+        route: params.route,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await ddb.send(new PutItemCommand({
+        TableName: tripsTable(),
+        Item: marshall(item, { removeUndefinedValues: true }),
+      }));
+      return item as TripRecord;
+    } catch {
+      // fallback to Supabase below
+    }
+  }
+  // Supabase fallback
   // 既存の同一 selection を検索し、あれば更新
   const existing = await listTripsByUser(params.userId);
   const targetSig = selectionSignature(params.selection);
@@ -70,7 +118,6 @@ export async function saveTrip(params: {
   if (dup) {
     return await updateTrip({ id: dup.id, title: params.title, note: params.note ?? null, selection: params.selection, route: params.route });
   }
-  // 新規作成
   const id = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() :
     Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   await ensureTripsTable();
@@ -100,6 +147,24 @@ export async function saveTrip(params: {
 }
 
 export async function listTripsByUser(userId: string): Promise<TripRecord[]> {
+  const ddb = getTripsDdb();
+  if (ddb) {
+    try {
+      const res = await ddb.send(new QueryCommand({
+        TableName: tripsTable(),
+        KeyConditionExpression: '#pk = :uid',
+        ExpressionAttributeNames: { '#pk': 'userId' },
+        ExpressionAttributeValues: marshall({ ':uid': userId }),
+        ScanIndexForward: false,
+        Limit: 100,
+      }));
+      const items = (res.Items ?? []).map((it) => unmarshall(it));
+      const out = items.map((row: any) => normalizeTripRow(row));
+      return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    } catch {
+      // fallback to Supabase below
+    }
+  }
   await ensureTripsTable();
   const supabase = await createServerClient();
   const { data: rows, error } = await supabase
@@ -112,6 +177,16 @@ export async function listTripsByUser(userId: string): Promise<TripRecord[]> {
 }
 
 export async function getTripById(id: string, userId: string): Promise<TripRecord | null> {
+  const ddb = getTripsDdb();
+  if (ddb) {
+    try {
+      const all = await listTripsByUser(userId);
+      const hit = all.find(t => t.id === id) || null;
+      return hit;
+    } catch {
+      // fallback to Supabase below
+    }
+  }
   await ensureTripsTable();
   const supabase = await createServerClient();
   const { data: rows, error } = await supabase
@@ -142,4 +217,17 @@ function normalizeTripRow(row: any): TripRecord {
     updatedAt,
   };
 }
+
+function getTripsDdb(): DynamoDBClient | null {
+  try {
+    if (process.env.TRIPS_REGION && process.env.TRIPS_TABLE) {
+      return new DynamoDBClient({ region: process.env.TRIPS_REGION });
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const tripsTable = () => process.env.TRIPS_TABLE as string;
 
