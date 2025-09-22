@@ -11,7 +11,13 @@ const nanumGothicCoding = Nanum_Gothic_Coding({
 });
 
 export default async function Header() {
-  const session = await getServerSession(authOptions);
+  let session: any = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    // Auth 未設定やENV不足時は未ログイン扱いで続行
+    session = null;
+  }
   const userImage = (session?.user as any)?.image as string | undefined;
   const userName = (session?.user as any)?.name as string | undefined;
   const fallbackInitial = userName?.[0]?.toUpperCase() ?? "U";
