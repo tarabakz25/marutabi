@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import Cognito from "next-auth/providers/cognito";
 import Google from "next-auth/providers/google";
+import { createHash } from "node:crypto";
 
 const providers = [] as any[];
 
@@ -29,7 +30,15 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: (() => {
+    if (process.env.NEXTAUTH_SECRET) return process.env.NEXTAUTH_SECRET;
+    const issuer = process.env.COGNITO_ISSUER || process.env.GOOGLE_CLIENT_ID || process.env.NEXTAUTH_URL || "";
+    const seed = `${issuer}:${process.env.COGNITO_CLIENT_ID ?? ""}`;
+    if (seed.trim().length > 0) {
+      return createHash("sha256").update(seed).digest("hex");
+    }
+    return "fallback-secret"; // 最終手段（本番ではENV設定推奨）
+  })(),
   providers,
   callbacks: {
     async session({ session, token }) {
