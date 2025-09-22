@@ -7,6 +7,7 @@ import { getCache, setCache } from '@/lib/cache';
 // 静的生成を使用してパフォーマンスを向上
 export const dynamic = 'error';
 export const revalidate = 3600; // 1時間ごとに再検証
+export const runtime = 'nodejs';
 
 // メモリ内キャッシュ
 let stationsCache: string | null = null;
@@ -16,7 +17,8 @@ export async function GET() {
     // メモリキャッシュをチェック
     if (stationsCache) {
       const gz = gzipSync(Buffer.from(stationsCache, 'utf-8'));
-      return new NextResponse(gz, {
+      const body = new Uint8Array(gz);
+      return new NextResponse(body, {
         headers: {
           'content-type': 'application/geo+json; charset=utf-8',
           'content-encoding': 'gzip',
@@ -30,7 +32,8 @@ export async function GET() {
     if (cachedData) {
       stationsCache = cachedData;
       const gz = gzipSync(Buffer.from(cachedData, 'utf-8'));
-      return new NextResponse(gz, {
+      const body = new Uint8Array(gz);
+      return new NextResponse(body, {
         headers: {
           'content-type': 'application/geo+json; charset=utf-8',
           'content-encoding': 'gzip',
@@ -48,7 +51,8 @@ export async function GET() {
     await setCache('stations_geojson', content);
     
     const gz = gzipSync(Buffer.from(content, 'utf-8'));
-    return new NextResponse(gz, {
+    const body = new Uint8Array(gz);
+    return new NextResponse(body, {
       headers: {
         'content-type': 'application/geo+json; charset=utf-8',
         'content-encoding': 'gzip',
