@@ -43,7 +43,16 @@ export default function Login() {
           
           <div className="space-y-4">
             {providers && Object.values(providers).length === 0 && (
-              <div className="text-sm text-red-600">ログインプロバイダーが未設定です。</div>
+              <div className="space-y-3">
+                <div className="text-sm text-red-600">ログインプロバイダーが未設定です。</div>
+                <Button 
+                  onClick={() => signIn("cognito", { callbackUrl: '/' })}
+                  className="w-full h-12 text-base font-medium"
+                  variant="outline"
+                >
+                  Cognito でログイン（強制試行）
+                </Button>
+              </div>
             )}
             {providers && providers["google"] && (
               <Button 
