@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { gzipSync } from 'node:zlib';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getCache, setCache } from '@/lib/cache';
@@ -14,9 +15,11 @@ export async function GET() {
   try {
     // メモリキャッシュをチェック
     if (railroadsCache) {
-      return new NextResponse(railroadsCache, {
+      const gz = gzipSync(Buffer.from(railroadsCache, 'utf-8'));
+      return new NextResponse(gz, {
         headers: {
           'content-type': 'application/geo+json; charset=utf-8',
+          'content-encoding': 'gzip',
           'cache-control': 'public, max-age=3600, stale-while-revalidate=86400'
         }
       });
@@ -26,9 +29,11 @@ export async function GET() {
     const cachedData = await getCache<string>('railroads_geojson');
     if (cachedData) {
       railroadsCache = cachedData;
-      return new NextResponse(cachedData, {
+      const gz = gzipSync(Buffer.from(cachedData, 'utf-8'));
+      return new NextResponse(gz, {
         headers: {
           'content-type': 'application/geo+json; charset=utf-8',
+          'content-encoding': 'gzip',
           'cache-control': 'public, max-age=3600, stale-while-revalidate=86400'
         }
       });
@@ -42,9 +47,11 @@ export async function GET() {
     railroadsCache = content;
     await setCache('railroads_geojson', content);
     
-    return new NextResponse(content, {
+    const gz = gzipSync(Buffer.from(content, 'utf-8'));
+    return new NextResponse(gz, {
       headers: {
         'content-type': 'application/geo+json; charset=utf-8',
+        'content-encoding': 'gzip',
         'cache-control': 'public, max-age=3600, stale-while-revalidate=86400'
       }
     });
