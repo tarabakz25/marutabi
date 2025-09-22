@@ -15,7 +15,7 @@ function isBedrock(): boolean {
 
 function createBedrockCompat(): OpenAICompat {
   const client = new BedrockRuntimeClient({
-    region: process.env.AWS_REGION,
+    region: process.env.BEDROCK_REGION,
   });
   const modelId = process.env.BEDROCK_MODEL_ID;
   if (!modelId) {

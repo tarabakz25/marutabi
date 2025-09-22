@@ -158,8 +158,8 @@ async function saveNotificationToFile(rec: NotificationRecord): Promise<void> {
 // ---- DDB utils ----
 function getDdb(): DynamoDBClient | null {
   try {
-    if (process.env.AWS_REGION && process.env.NOTIFICATIONS_TABLE) {
-      return new DynamoDBClient({});
+    if (process.env.NOTIFICATIONS_REGION && process.env.NOTIFICATIONS_TABLE) {
+      return new DynamoDBClient({ region: process.env.NOTIFICATIONS_REGION });
     }
     return null;
   } catch {
