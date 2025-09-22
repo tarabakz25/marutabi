@@ -13,6 +13,13 @@ export async function GET(req: Request, ctx: any) {
         const body = JSON.stringify({ user: null, expires: new Date(Date.now() + 24 * 3600 * 1000).toISOString() });
         return new Response(body, { headers: { "content-type": "application/json" } });
       }
+      if (url.pathname.endsWith("/providers")) {
+        // 環境変数未設定時でもクライアントが落ちないよう空配列を返す
+        return new Response("{}", { headers: { "content-type": "application/json" } });
+      }
+      if (url.pathname.endsWith("/_log")) {
+        return new Response("ok", { headers: { "content-type": "text/plain; charset=utf-8" } });
+      }
     } catch {}
     console.error("NextAuth GET error", e);
     return new Response("Auth error", { status: 500 });
