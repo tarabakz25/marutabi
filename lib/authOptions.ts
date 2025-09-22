@@ -3,12 +3,26 @@ import Cognito from "next-auth/providers/cognito";
 import Google from "next-auth/providers/google";
 
 const providers = [] as any[];
+
+// Google
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    })
+  );
+}
+
+// Cognito
 if (process.env.COGNITO_CLIENT_ID && process.env.COGNITO_CLIENT_SECRET && process.env.COGNITO_ISSUER) {
-  providers.push(Cognito({
-    clientId: process.env.COGNITO_CLIENT_ID!,
-    clientSecret: process.env.COGNITO_CLIENT_SECRET!,
-    issuer: process.env.COGNITO_ISSUER!,
-  }));
+  providers.push(
+    Cognito({
+      clientId: process.env.COGNITO_CLIENT_ID!,
+      clientSecret: process.env.COGNITO_CLIENT_SECRET!,
+      issuer: process.env.COGNITO_ISSUER!,
+    })
+  );
 }
 
 export const authOptions: NextAuthOptions = {
